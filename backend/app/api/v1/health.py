@@ -1,0 +1,20 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models.hvac_system import HvacSystem
+from app.models.knowledge_source import KnowledgeSource
+from app.schemas.common import HealthResponse
+
+router = APIRouter(tags=["health"])
+
+
+@router.get("/health", response_model=HealthResponse)
+def health(db: Session = Depends(get_db)) -> HealthResponse:
+    hvac_count = db.query(HvacSystem).count()
+    source_count = db.query(KnowledgeSource).count()
+    return HealthResponse(
+        status="ok",
+        hvac_system_count=hvac_count,
+        knowledge_sources=source_count,
+    )
