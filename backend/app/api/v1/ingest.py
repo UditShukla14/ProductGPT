@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.ingestion.hvac_system_finder import SOURCE_TYPE
+from app.ingestion.goodman_ratings import SOURCE_TYPE
 from app.ingestion.registry import ingest_file
 from app.schemas.common import IngestUploadResponse
 
@@ -24,7 +24,7 @@ async def upload_knowledge_file(
     if source_type not in SUPPORTED_TYPES:
         raise HTTPException(status_code=400, detail=f"Unsupported source type: {source_type}")
 
-    suffix = Path(file.filename or "upload.csv").suffix or ".csv"
+    suffix = Path(file.filename or "upload.xlsx").suffix or ".xlsx"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         contents = await file.read()
         tmp.write(contents)

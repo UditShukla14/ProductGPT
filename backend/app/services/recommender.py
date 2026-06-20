@@ -23,29 +23,21 @@ def _score_system(system: HvacSystem, request: HvacRecommendationRequest) -> tup
         score += 20
         reasons.append(f"SEER {system.seer} >= {request.min_seer}")
 
-    if request.config and system.config and request.config.lower() in system.config.lower():
-        score += 15
-        reasons.append(f"config: {system.config}")
-
     if (
-        request.system_type_seer2
-        and system.system_type_seer2
-        and request.system_type_seer2.lower() in system.system_type_seer2.lower()
+        request.equipment_category
+        and system.equipment_category
+        and request.equipment_category == system.equipment_category
     ):
         score += 15
-        reasons.append(f"SEER2 type: {system.system_type_seer2}")
+        reasons.append(f"category: {system.equipment_category}")
 
-    if request.stage and system.stage and request.stage.lower() in system.stage.lower():
-        score += 10
-        reasons.append(f"stage: {system.stage}")
-
-    if request.indoor_unit and system.indoor_unit and request.indoor_unit.lower() in system.indoor_unit.lower():
-        score += 5
-        reasons.append(f"indoor: {system.indoor_unit}")
-
-    if request.furnace_btu and system.furnace_btu == request.furnace_btu:
-        score += 5
-        reasons.append(f"furnace BTU: {system.furnace_btu}")
+    if (
+        request.refrigerant_type
+        and system.refrigerant_type
+        and request.refrigerant_type == system.refrigerant_type
+    ):
+        score += 15
+        reasons.append(f"refrigerant: {system.refrigerant_type}")
 
     if request.query and system.search_text:
         query_lower = request.query.lower()
@@ -74,11 +66,8 @@ def recommend_hvac_systems(
         tonnage=request.tonnage,
         min_seer=request.min_seer,
         max_seer=request.max_seer,
-        config=request.config,
-        system_type_seer2=request.system_type_seer2,
-        stage=request.stage,
-        indoor_unit=request.indoor_unit,
-        furnace_btu=request.furnace_btu,
+        equipment_category=request.equipment_category,
+        refrigerant_type=request.refrigerant_type,
         query=request.query,
         active_only=True,
         page=1,

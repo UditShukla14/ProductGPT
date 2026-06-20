@@ -24,6 +24,8 @@ export interface HvacSystem {
   blower_type: string | null
   description: string | null
   model_status: string | null
+  equipment_category: string | null
+  refrigerant_type: string | null
   outdoor_model: string | null
   coil_model: string | null
   furnace_model: string | null
@@ -35,11 +37,8 @@ export interface HvacRecommendationRequest {
   tonnage?: number
   min_seer?: number
   max_seer?: number
-  config?: string
-  system_type_seer2?: string
-  stage?: string
-  indoor_unit?: string
-  furnace_btu?: string
+  equipment_category?: string
+  refrigerant_type?: string
   query?: string
   limit?: number
   offset?: number
@@ -70,6 +69,10 @@ export interface HealthResponse {
   status: string
   hvac_system_count: number
   knowledge_sources: number
+  graph_node_count: number
+  graph_edge_count: number
+  graph_backend: string
+  neo4j_connected: boolean
 }
 
 export type ComponentType = "outdoor" | "coil" | "furnace" | "auto"
@@ -77,6 +80,8 @@ export type ComponentType = "outdoor" | "coil" | "furnace" | "auto"
 export interface ComponentSearchRequest {
   model: string
   component_type?: ComponentType
+  equipment_category?: string
+  refrigerant_type?: string
   limit?: number
   offset?: number
   prefer_higher_seer?: boolean
@@ -103,5 +108,32 @@ export interface ComponentSearchResponse {
     returned: number
     has_more: boolean
     component_type: ComponentType
+  }
+}
+
+export interface PairedMatchupsRequest {
+  anchor_type: "outdoor" | "coil" | "furnace"
+  anchor_model: string
+  paired_type: "outdoor" | "coil" | "furnace"
+  paired_model: string
+  equipment_category?: string
+  refrigerant_type?: string
+  limit?: number
+  offset?: number
+  prefer_higher_seer?: boolean
+}
+
+export interface PairedMatchupsResponse {
+  anchor_type: "outdoor" | "coil" | "furnace"
+  anchor_model: string
+  paired_type: "outdoor" | "coil" | "furnace"
+  paired_model: string
+  matchups: HvacRecommendation[]
+  meta: {
+    total_matchups: number
+    offset: number
+    limit: number
+    returned: number
+    has_more: boolean
   }
 }

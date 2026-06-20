@@ -9,7 +9,7 @@ from app.schemas.recommendations import HvacRecommendationRequest
 from app.services.hvac_search import search_hvac_systems
 from app.schemas.hvac import HvacSearchRequest
 from app.services.recommender import recommend_hvac_systems
-from app.ingestion.hvac_system_finder import ingest_hvac_csv
+from app.ingestion.goodman_ratings import ingest_goodman_ratings
 from app.config import settings
 
 
@@ -17,7 +17,7 @@ def test_seed_and_recommend(tmp_path=None):
     init_db()
     db = SessionLocal()
     try:
-        ingest_hvac_csv(db, settings.default_hvac_csv, replace=True)
+        ingest_goodman_ratings(db, settings.default_goodman_ratings_xlsx, replace=True)
 
         search_result, meta = search_hvac_systems(
             db,
@@ -29,7 +29,13 @@ def test_seed_and_recommend(tmp_path=None):
 
         recs = recommend_hvac_systems(
             db,
-            HvacRecommendationRequest(tonnage=2.0, min_seer=15, config="Horizontal Flow", limit=5),
+            HvacRecommendationRequest(
+                tonnage=2.0,
+                min_seer=15,
+                equipment_category="AC",
+                refrigerant_type="R-32",
+                limit=5,
+            ),
         )
         assert len(recs.recommendations) <= 5
         assert recs.recommendations[0].score > 0

@@ -4,6 +4,8 @@ import type {
   HealthResponse,
   HvacRecommendationRequest,
   HvacRecommendationResponse,
+  PairedMatchupsRequest,
+  PairedMatchupsResponse,
 } from "@/types/api"
 
 const API_BASE = "/api/v1"
@@ -51,6 +53,13 @@ export function fetchRecommendations(payload: HvacRecommendationRequest) {
 
 export function fetchComponentSearch(payload: ComponentSearchRequest) {
   return request<ComponentSearchResponse>("/hvac/components/search", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  })
+}
+
+export function fetchPairedMatchups(payload: PairedMatchupsRequest) {
+  return request<PairedMatchupsResponse>("/hvac/components/matchups", {
     method: "POST",
     body: JSON.stringify(payload),
   })

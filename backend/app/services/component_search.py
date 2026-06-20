@@ -8,6 +8,8 @@ from app.schemas.component_search import (
     BoughtTogetherItem,
     ComponentSearchRequest,
     ComponentSearchResponse,
+    PairedMatchupsRequest,
+    PairedMatchupsResponse,
 )
 from app.schemas.recommendations import HvacRecommendation
 from app.services.hvac_search import system_to_schema
@@ -66,6 +68,14 @@ def _filter_by_component(query: str, component_type: str):
             HvacSystem.coil_model_revision.ilike(term),
         )
     return HvacSystem.furnace_model_revision.ilike(term)
+
+
+def _apply_goodman_filters(query, equipment_category: str | None, refrigerant_type: str | None):
+    if equipment_category:
+        query = query.filter(HvacSystem.equipment_category == equipment_category.strip())
+    if refrigerant_type:
+        query = query.filter(HvacSystem.refrigerant_type == refrigerant_type.strip())
+    return query
 
 
 def _build_matchup_reason(
@@ -165,6 +175,9 @@ def search_by_component(
     base_query = db.query(HvacSystem).filter(
         func.lower(HvacSystem.model_status) == "active"
     )
+    base_query = _apply_goodman_filters(
+        base_query, request.equipment_category, request.refrigerant_type
+    )
 
     if request.component_type == "auto":
         base_query = base_query.filter(
@@ -236,5 +249,68 @@ def search_by_component(
         matched_model=matched_model,
         similar_matchups=page,
         bought_together=bought_together,
+        meta=meta,
+    )
+
+
+def search_paired_matchups(
+    db: Session, request: PairedMatchupsRequest
+) -> PairedMatchupsResponse:
+    base_query = db.query(HvacSystem).filter(
+        func.lower(HvacSystem.model_status) == "active",
+        _filter_by_component(request.anchor_model, request.anchor_type),
+        _filter_by_component(request.paired_model, request.paired_type),
+    )
+    base_query = _apply_goodman_filters(
+        base_query, request.equipment_category, request.refrigerant_type
+    )
+
+    systems = (
+        base_query.order_by(
+            cast(HvacSystem.seer, Float).desc().nullslast(),
+            HvacSystem.ahri_number,
+        )
+        .all()
+    )
+
+    ranked: list[HvacRecommendation] = []
+    for system in systems:
+        reason = _build_matchup_reason(
+            request.anchor_type,
+            request.anchor_model,
+            system,
+        )
+        score = _score_matchup(
+            system,
+            request.anchor_model,
+            request.anchor_type,
+            request.prefer_higher_seer,
+        )
+        ranked.append(
+            HvacRecommendation(
+                system=system_to_schema(system),
+                score=score,
+                reason=reason,
+            )
+        )
+
+    ranked.sort(key=lambda item: item.score, reverse=True)
+    ranked = normalize_recommendation_scores(ranked)
+    page = ranked[request.offset : request.offset + request.limit]
+
+    meta = {
+        "total_matchups": len(ranked),
+        "offset": request.offset,
+        "limit": request.limit,
+        "returned": len(page),
+        "has_more": request.offset + len(page) < len(ranked),
+    }
+
+    return PairedMatchupsResponse(
+        anchor_type=request.anchor_type,
+        anchor_model=request.anchor_model,
+        paired_type=request.paired_type,
+        paired_model=request.paired_model,
+        matchups=page,
         meta=meta,
     )

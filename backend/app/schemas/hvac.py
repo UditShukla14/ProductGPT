@@ -27,6 +27,8 @@ class HvacSystemOut(BaseModel):
     blower_type: str | None = None
     description: str | None
     model_status: str | None
+    equipment_category: str | None = None
+    refrigerant_type: str | None = None
     outdoor_model: str | None
     coil_model: str | None
     furnace_model: str | None
@@ -40,11 +42,8 @@ class HvacSearchRequest(BaseModel):
     tonnage: float | None = None
     min_seer: float | None = None
     max_seer: float | None = None
-    config: str | None = None
-    system_type_seer2: str | None = None
-    stage: str | None = None
-    indoor_unit: str | None = None
-    furnace_btu: str | None = None
+    equipment_category: str | None = None
+    refrigerant_type: str | None = None
     outdoor_model: str | None = None
     coil_model: str | None = None
     furnace_model: str | None = None

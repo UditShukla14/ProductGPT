@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import api_router
 from app.config import settings
 from app.database import SessionLocal, init_db
-from app.ingestion.hvac_system_finder import ingest_hvac_csv
+from app.ingestion.goodman_ratings import ingest_goodman_ratings
+from app.knowledge_graph.neo4j_client import neo4j_client
+from app.knowledge_graph.store import graph_store
 from app.models.hvac_system import HvacSystem
 
 
@@ -15,21 +17,23 @@ def seed_hvac_data_if_needed() -> None:
     db = SessionLocal()
     try:
         count = db.query(HvacSystem).count()
-        if count > 0:
-            return
-        csv_path = settings.default_hvac_csv
-        if csv_path.exists():
-            ingest_hvac_csv(db, csv_path, replace=True)
+        if count == 0:
+            xlsx_path = settings.default_goodman_ratings_xlsx
+            if xlsx_path.exists():
+                ingest_goodman_ratings(db, xlsx_path, replace=True)
+        graph_store.connect_neo4j()
+        graph_store.rebuild(db)
     finally:
         db.close()
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Path(settings.default_hvac_csv).parent.mkdir(parents=True, exist_ok=True)
+    Path(settings.default_goodman_ratings_xlsx).parent.mkdir(parents=True, exist_ok=True)
     init_db()
     seed_hvac_data_if_needed()
     yield
+    neo4j_client.close()
 
 
 app = FastAPI(title=settings.app_name, lifespan=lifespan)

@@ -42,13 +42,9 @@ function buildSpecificationFields(system: HvacSystem): Array<[string, string]> {
     ["Cond SEER", system.cond_seer],
     ["Tonnage", system.tonnage],
     ["Version", system.version],
+    ["Equipment Category", system.equipment_category],
+    ["Refrigerant", system.refrigerant_type],
     ["System Type", system.system_type],
-    ["System Type SEER2", system.system_type_seer2],
-    ["Stage", system.stage],
-    ["Configuration", system.config],
-    ["Indoor Unit", system.indoor_unit],
-    ["Indoor Type", system.indoor_type],
-    ["Furnace BTU", system.furnace_btu],
     ["Cabinet Width", system.cabinet_width ? `${system.cabinet_width}"` : null],
     ["Blower Type", system.blower_type],
     ["Model Status", system.model_status],
@@ -74,7 +70,7 @@ export function SystemDetailModal({ recommendation, rank, open, onClose }: Syste
     <Dialog open={open} onClose={onClose}>
       <DialogHeader
         title={system.description ?? "HVAC system details"}
-        description={system.system_type_seer2 ?? system.system_type ?? undefined}
+        description={system.equipment_category ?? system.system_type ?? undefined}
         onClose={onClose}
       />
 

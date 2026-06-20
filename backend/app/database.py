@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.config import settings
@@ -24,7 +24,38 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _migrate_hvac_columns() -> None:
+    inspector = inspect(engine)
+    if "hvac_systems" not in inspector.get_table_names():
+        return
+
+    existing = {column["name"] for column in inspector.get_columns("hvac_systems")}
+    additions = {
+        "equipment_category": "VARCHAR(64)",
+        "refrigerant_type": "VARCHAR(32)",
+    }
+
+    with engine.begin() as conn:
+        for column_name, column_type in additions.items():
+            if column_name not in existing:
+                conn.execute(text(f"ALTER TABLE hvac_systems ADD COLUMN {column_name} {column_type}"))
+
+        if "equipment_category" not in existing or "refrigerant_type" not in existing:
+            conn.execute(
+                text(
+                    """
+                    UPDATE hvac_systems
+                    SET equipment_category = json_extract(raw_json, '$._equipment_category'),
+                        refrigerant_type = json_extract(raw_json, '$._refrigerant')
+                    WHERE raw_json IS NOT NULL
+                      AND (equipment_category IS NULL OR refrigerant_type IS NULL)
+                    """
+                )
+            )
+
+
 def init_db() -> None:
     from app.models import hvac_system, knowledge_source  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
+    _migrate_hvac_columns()

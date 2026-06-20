@@ -1,33 +1,29 @@
-import type { BoughtTogetherItem } from "@/types/api"
-import { Box, Flame, Package, Snowflake } from "lucide-react"
+import { Box, ChevronRight, Flame, Package, Snowflake } from "lucide-react"
 
+import { CardCarousel } from "@/components/CardCarousel"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { COMPONENT_SECTION_CONFIG } from "@/constants/hvac"
+import { cn } from "@/lib/utils"
+import type { BoughtTogetherItem } from "@/types/api"
 
-const typeConfig = {
-  outdoor: {
-    label: "Outdoor units",
-    icon: Snowflake,
-    description: "Compatible condensers certified with your search",
-  },
-  coil: {
-    label: "Evaporator coils",
-    icon: Box,
-    description: "Compatible coils to complete the matchup",
-  },
-  furnace: {
-    label: "Furnaces",
-    icon: Flame,
-    description: "Compatible furnaces to complete the matchup",
-  },
+const typeIcons = {
+  outdoor: Snowflake,
+  coil: Box,
+  furnace: Flame,
 } as const
 
 interface BoughtTogetherSectionProps {
   items: BoughtTogetherItem[]
   searchedType: "outdoor" | "coil" | "furnace" | null
+  onItemClick?: (item: BoughtTogetherItem) => void
 }
 
-export function BoughtTogetherSection({ items, searchedType }: BoughtTogetherSectionProps) {
+export function BoughtTogetherSection({
+  items,
+  searchedType,
+  onItemClick,
+}: BoughtTogetherSectionProps) {
   if (items.length === 0) return null
 
   const grouped = (["outdoor", "coil", "furnace"] as const)
@@ -39,55 +35,86 @@ export function BoughtTogetherSection({ items, searchedType }: BoughtTogetherSec
     .filter((group) => group.items.length > 0)
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h2 className="flex items-center gap-2 text-lg font-semibold">
-          <Package className="size-5" />
+    <section className="space-y-2">
+      <div className="flex items-center gap-2">
+        <Package className="size-3.5 text-muted-foreground" />
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           Frequently bought together
         </h2>
-        <p className="text-sm text-muted-foreground">
-          Other certified components paired with your model in AHRI matchups
-        </p>
       </div>
 
-      <div className="space-y-4">
+      <CardCarousel
+        ariaLabel="Frequently bought together sections"
+        slideClassName="w-[min(100%,20rem)] sm:w-[22rem]"
+      >
         {grouped.map(({ type, items: groupItems }) => {
-          const config = typeConfig[type]
-          const Icon = config.icon
+          const config = COMPONENT_SECTION_CONFIG[type]
+          const Icon = typeIcons[type]
+          const isClickable = (type === "coil" || type === "furnace") && onItemClick != null
 
           return (
-            <Card key={type}>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-base">
-                  <Icon className="size-4" />
+            <Card key={type} className="gap-0 py-0 shadow-none">
+              <CardHeader className="gap-1 px-3 py-2.5">
+                <CardTitle className="flex items-center gap-1.5 text-sm">
+                  <Icon className="size-3.5" />
                   {config.label}
                 </CardTitle>
-                <CardDescription>{config.description}</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-2 sm:grid-cols-2">
-                {groupItems.map((item) => (
-                  <div
-                    key={`${item.type}-${item.model}`}
-                    className="flex items-start justify-between gap-3 rounded-lg border bg-muted/20 px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="font-mono text-sm font-semibold">{item.model}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {item.matchup_count} certified matchup{item.matchup_count === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    {item.best_seer != null && (
-                      <Badge variant="outline" className="shrink-0">
-                        SEER {item.best_seer}
-                      </Badge>
-                    )}
-                  </div>
-                ))}
+              <CardContent className="space-y-1.5 px-3 pb-3">
+                {groupItems.slice(0, 6).map((item) => {
+                  const content = (
+                    <>
+                      <div className="min-w-0">
+                        <p className="truncate font-mono text-xs font-medium">{item.model}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {item.matchup_count} matchup{item.matchup_count === 1 ? "" : "s"}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {item.best_seer != null && (
+                          <Badge variant="outline" className="px-1 py-0 text-[10px]">
+                            {item.best_seer}
+                          </Badge>
+                        )}
+                        {isClickable && <ChevronRight className="size-3 text-primary" />}
+                      </div>
+                    </>
+                  )
+
+                  const className = cn(
+                    "flex w-full items-center justify-between gap-2 rounded-md border px-2 py-1.5 text-left",
+                    isClickable
+                      ? "bg-muted/30 transition-colors hover:border-primary/40 hover:bg-primary/5"
+                      : "bg-muted/20"
+                  )
+
+                  if (!isClickable) {
+                    return (
+                      <div key={`${item.type}-${item.model}`} className={className}>
+                        {content}
+                      </div>
+                    )
+                  }
+
+                  return (
+                    <button
+                      key={`${item.type}-${item.model}`}
+                      type="button"
+                      onClick={() => onItemClick(item)}
+                      className={cn(
+                        className,
+                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                      )}
+                    >
+                      {content}
+                    </button>
+                  )
+                })}
               </CardContent>
             </Card>
           )
         })}
-      </div>
+      </CardCarousel>
     </section>
   )
 }

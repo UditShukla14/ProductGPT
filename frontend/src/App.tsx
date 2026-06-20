@@ -3,21 +3,23 @@ import { useInfiniteQuery } from "@tanstack/react-query"
 import { Loader2, Search, Sparkles } from "lucide-react"
 
 import { AppHeader } from "@/components/AppHeader"
+import { BoughtTogetherMatchupsModal } from "@/components/BoughtTogetherMatchupsModal"
 import { BoughtTogetherSection } from "@/components/BoughtTogetherSection"
+import { CardCarousel } from "@/components/CardCarousel"
 import { SystemCard } from "@/components/SystemCard"
 import { SystemDetailModal } from "@/components/SystemDetailModal"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
-import { SYSTEM_TYPE_SEER2_OPTIONS } from "@/constants/hvac"
+import { EQUIPMENT_CATEGORY_OPTIONS, REFRIGERANT_OPTIONS, componentTypeLabel } from "@/constants/hvac"
 import { fetchComponentSearch, fetchRecommendations } from "@/lib/api"
 import type {
+  BoughtTogetherItem,
   ComponentSearchRequest,
   ComponentType,
   HvacRecommendation,
@@ -33,14 +35,16 @@ type SearchForm = Omit<HvacRecommendationRequest, "limit" | "offset">
 type ProductSearchForm = {
   model: string
   component_type: ComponentType
+  equipment_category?: string
+  refrigerant_type?: string
   prefer_higher_seer: boolean
 }
 
 const defaultForm: SearchForm = {
   tonnage: 2,
-  min_seer: 14,
-  config: "Horizontal Flow",
-  system_type_seer2: "Split System (SEER2) - Gas Heating 15.3 SEER",
+  min_seer: 15,
+  equipment_category: "AC",
+  refrigerant_type: "R-32",
   prefer_higher_seer: true,
 }
 
@@ -55,19 +59,33 @@ function buildSearchPayload(form: SearchForm): HvacRecommendationRequest {
     tonnage: form.tonnage || undefined,
     min_seer: form.min_seer || undefined,
     max_seer: form.max_seer || undefined,
-    config: form.config || undefined,
-    system_type_seer2: form.system_type_seer2 || undefined,
-    stage: form.stage || undefined,
-    indoor_unit: form.indoor_unit || undefined,
-    furnace_btu: form.furnace_btu || undefined,
+    equipment_category: form.equipment_category || undefined,
+    refrigerant_type: form.refrigerant_type || undefined,
     query: form.query || undefined,
     prefer_higher_seer: form.prefer_higher_seer,
   }
 }
 
-function componentTypeLabel(type: ComponentType | null | undefined) {
-  if (!type || type === "auto") return "component"
-  return type
+function SectionHeading({
+  title,
+  detail,
+  count,
+}: {
+  title: string
+  detail?: string
+  count?: string
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {title}
+        </h2>
+        {detail && <p className="mt-0.5 truncate text-xs text-muted-foreground">{detail}</p>}
+      </div>
+      {count && <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{count}</span>}
+    </div>
+  )
 }
 
 export default function App() {
@@ -84,6 +102,7 @@ export default function App() {
     recommendation: HvacRecommendation
     rank: number
   } | null>(null)
+  const [pairedMatchupItem, setPairedMatchupItem] = useState<BoughtTogetherItem | null>(null)
   const activeSearchRef = useRef<HvacRecommendationRequest | null>(null)
   const activeProductSearchRef = useRef<ComponentSearchRequest | null>(null)
   const loadMoreRef = useRef<HTMLDivElement>(null)
@@ -160,9 +179,7 @@ export default function App() {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          fetchNextCriteriaPage()
-        }
+        if (entries[0]?.isIntersecting) fetchNextCriteriaPage()
       },
       { rootMargin: "200px" }
     )
@@ -183,9 +200,7 @@ export default function App() {
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          fetchNextProductPage()
-        }
+        if (entries[0]?.isIntersecting) fetchNextProductPage()
       },
       { rootMargin: "200px" }
     )
@@ -229,6 +244,8 @@ export default function App() {
     const payload: ComponentSearchRequest = {
       model,
       component_type: productForm.component_type,
+      equipment_category: productForm.equipment_category,
+      refrigerant_type: productForm.refrigerant_type,
       prefer_higher_seer: productForm.prefer_higher_seer,
     }
     activeProductSearchRef.current = payload
@@ -236,6 +253,7 @@ export default function App() {
     setActiveMode("product")
     setProductSearchKey((key) => key + 1)
     setSelected(null)
+    setPairedMatchupItem(null)
   }
 
   const recommendations: HvacRecommendation[] =
@@ -250,7 +268,10 @@ export default function App() {
   const productMeta = productData?.pages[productData.pages.length - 1]?.meta
   const productTotal = productMeta?.total_matchups ?? 0
   const matchedType = productFirstPage?.matched_type ?? null
-  const matchedModel = productFirstPage?.matched_model ?? null
+  const matchedModel = productFirstPage?.matched_model ?? activeProductSearch?.model ?? null
+  const pairedAnchorType = matchedType ?? productForm.component_type
+  const canShowPairedMatchups =
+    pairedAnchorType !== "auto" && matchedModel != null && matchedModel.length > 0
 
   const hasSearched = activeMode !== null
   const isCriteriaMode = activeMode === "criteria"
@@ -260,315 +281,224 @@ export default function App() {
   const isInitialProductLoading = isProductMode && isProductFetching && productMatchups.length === 0
 
   return (
-    <div className="min-h-svh bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.08),_transparent_35%)]">
+    <div className="min-h-svh bg-background">
       <AppHeader
         productModel={productForm.model}
         componentType={productForm.component_type}
+        equipmentCategory={productForm.equipment_category}
+        refrigerantType={productForm.refrigerant_type}
         preferHigherSeer={productForm.prefer_higher_seer}
         isProductSearching={isInitialProductLoading}
         onProductModelChange={(value) => updateProductField("model", value)}
         onComponentTypeChange={(value) => updateProductField("component_type", value)}
+        onEquipmentCategoryChange={(value) => updateProductField("equipment_category", value)}
+        onRefrigerantTypeChange={(value) => updateProductField("refrigerant_type", value)}
         onPreferHigherSeerChange={(value) => updateProductField("prefer_higher_seer", value)}
         onProductSubmit={handleProductSubmit}
       />
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[360px_1fr] lg:px-6">
-        <div className="lg:sticky lg:top-[calc(var(--app-header-height,12rem)+1.5rem)] lg:self-start">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="size-4" />
-                System criteria
-              </CardTitle>
-              <CardDescription>
-                Filter AHRI-certified bundles and rank by efficiency and fit.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form className="space-y-4" onSubmit={handleCriteriaSubmit}>
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-                  <div className="space-y-2">
-                    <Label htmlFor="tonnage">Tonnage</Label>
-                    <Select
-                      id="tonnage"
-                      value={String(form.tonnage ?? "")}
-                      onChange={(event) =>
-                        updateField("tonnage", Number(event.target.value) || undefined)
-                      }
-                    >
-                      <option value="">Any</option>
-                      {[1.5, 2, 2.5, 3, 3.5, 4, 5].map((value) => (
-                        <option key={value} value={value}>
-                          {value} Ton
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="min_seer">Minimum SEER</Label>
-                    <Input
-                      id="min_seer"
-                      type="number"
-                      step="0.1"
-                      value={form.min_seer ?? ""}
-                      onChange={(event) =>
-                        updateField("min_seer", Number(event.target.value) || undefined)
-                      }
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="config">Configuration</Label>
-                    <Select
-                      id="config"
-                      value={form.config ?? ""}
-                      onChange={(event) => updateField("config", event.target.value || undefined)}
-                    >
-                      <option value="">Any</option>
-                      <option value="Horizontal Flow">Horizontal Flow</option>
-                      <option value="Upflow">Upflow</option>
-                      <option value="Downflow">Downflow</option>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="system_type_seer2">System type (SEER2)</Label>
-                    <Select
-                      id="system_type_seer2"
-                      value={form.system_type_seer2 ?? ""}
-                      onChange={(event) =>
-                        updateField("system_type_seer2", event.target.value || undefined)
-                      }
-                    >
-                      <option value="">Any</option>
-                      {SYSTEM_TYPE_SEER2_OPTIONS.map((value) => (
-                        <option key={value} value={value}>
-                          {value}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="stage">Stage</Label>
-                    <Select
-                      id="stage"
-                      value={form.stage ?? ""}
-                      onChange={(event) => updateField("stage", event.target.value || undefined)}
-                    >
-                      <option value="">Any</option>
-                      <option value="SINGLE STAGE">Single Stage</option>
-                      <option value="TWO STAGE">Two Stage</option>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="furnace_btu">Furnace BTU</Label>
-                    <Input
-                      id="furnace_btu"
-                      placeholder="e.g. 060"
-                      value={form.furnace_btu ?? ""}
-                      onChange={(event) =>
-                        updateField("furnace_btu", event.target.value || undefined)
-                      }
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="query">Search hint</Label>
-                  <Input
-                    id="query"
-                    placeholder="modulating, 96% VS, ECM..."
-                    value={form.query ?? ""}
-                    onChange={(event) => updateField("query", event.target.value || undefined)}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between rounded-lg border px-3 py-2">
-                  <div>
-                    <p className="text-sm font-medium">Prefer higher SEER</p>
-                    <p className="text-xs text-muted-foreground">Boost efficient systems in ranking</p>
-                  </div>
-                  <Switch
-                    checked={form.prefer_higher_seer ?? true}
-                    onCheckedChange={(checked) => updateField("prefer_higher_seer", checked)}
-                  />
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isInitialCriteriaLoading}>
-                  {isInitialCriteriaLoading ? (
-                    <>
-                      <Loader2 className="animate-spin" />
-                      Finding systems…
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles />
-                      Get recommendations
-                    </>
-                  )}
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-
-        <section className="space-y-6">
-          {isCriteriaMode && (
-            <>
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold">Recommended systems</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Scroll to load more — {PAGE_SIZE} systems per batch.
-                  </p>
-                </div>
-                {criteriaMeta && (
-                  <p className="text-sm text-muted-foreground">
-                    Showing {recommendations.length} of {criteriaTotal}
-                  </p>
-                )}
-              </div>
-
-              <Separator />
-
-              {isCriteriaError && (
-                <Alert variant="destructive">
-                  <AlertTitle>Could not load recommendations</AlertTitle>
-                  <AlertDescription>
-                    {criteriaError instanceof Error ? criteriaError.message : "Unknown error"}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {isInitialCriteriaLoading && (
-                <div className="space-y-4">
-                  {[1, 2, 3].map((item) => (
-                    <Card key={item}>
-                      <CardContent className="space-y-3 pt-6">
-                        <Skeleton className="h-5 w-1/3" />
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-24 w-full" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {!isInitialCriteriaLoading && recommendations.length === 0 && !isCriteriaError && (
-                <Alert>
-                  <AlertTitle>No matches found</AlertTitle>
-                  <AlertDescription>
-                    Try relaxing filters such as minimum SEER, configuration, or system type.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              <div className="space-y-4">
-                {recommendations.map((recommendation, index) => (
-                  <SystemCard
-                    key={recommendation.system.id}
-                    recommendation={recommendation}
-                    rank={index + 1}
-                    onClick={() => setSelected({ recommendation, rank: index + 1 })}
-                  />
-                ))}
-              </div>
-
-              {recommendations.length > 0 && (
-                <div ref={loadMoreRef} className="flex justify-center py-4">
-                  {isFetchingNextCriteriaPage ? (
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                      <Loader2 className="size-4 animate-spin" />
-                      Loading more…
+      <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
+        <div className="grid gap-4 lg:grid-cols-[280px_1fr] lg:items-start">
+          <aside className="lg:sticky lg:top-[calc(var(--app-header-height,10rem)+0.75rem)] lg:self-start">
+            <Card className="gap-0 py-0 shadow-none">
+              <CardHeader className="gap-1 px-4 py-3">
+                <CardTitle className="flex items-center gap-1.5 text-sm">
+                  <Search className="size-3.5" />
+                  System criteria
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4">
+                <form className="space-y-3" onSubmit={handleCriteriaSubmit}>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="col-span-2 space-y-1">
+                      <Label htmlFor="tonnage" className="text-[11px] text-muted-foreground">
+                        Tonnage
+                      </Label>
+                      <Select
+                        id="tonnage"
+                        value={String(form.tonnage ?? "")}
+                        onChange={(event) =>
+                          updateField("tonnage", Number(event.target.value) || undefined)
+                        }
+                        className="h-8 text-sm"
+                      >
+                        <option value="">Any</option>
+                        {[1.5, 2, 2.5, 3, 3.5, 4, 5].map((value) => (
+                          <option key={value} value={value}>
+                            {value} Ton
+                          </option>
+                        ))}
+                      </Select>
                     </div>
-                  ) : hasNextCriteriaPage ? (
-                    <Button type="button" variant="outline" onClick={() => fetchNextCriteriaPage()}>
-                      Load {PAGE_SIZE} more
-                    </Button>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">All results loaded</p>
-                  )}
-                </div>
-              )}
-            </>
-          )}
 
-          {isProductMode && (
-            <>
-              <div className="flex items-end justify-between gap-4">
-                <div>
-                  <h2 className="text-lg font-semibold">Product search results</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {matchedModel ? (
+                    <div className="space-y-1">
+                      <Label htmlFor="min_seer" className="text-[11px] text-muted-foreground">
+                        Min SEER
+                      </Label>
+                      <Input
+                        id="min_seer"
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        placeholder="15"
+                        value={form.min_seer ?? ""}
+                        onChange={(event) =>
+                          updateField("min_seer", Number(event.target.value) || undefined)
+                        }
+                        className="h-8 text-sm"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <Label htmlFor="max_seer" className="text-[11px] text-muted-foreground">
+                        Max SEER
+                      </Label>
+                      <Input
+                        id="max_seer"
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        placeholder="Any"
+                        value={form.max_seer ?? ""}
+                        onChange={(event) =>
+                          updateField("max_seer", Number(event.target.value) || undefined)
+                        }
+                        className="h-8 text-sm"
+                      />
+                    </div>
+
+                    <div className="col-span-2 space-y-1">
+                      <Label htmlFor="equipment_category" className="text-[11px] text-muted-foreground">
+                        Category
+                      </Label>
+                      <Select
+                        id="equipment_category"
+                        value={form.equipment_category ?? ""}
+                        onChange={(event) =>
+                          updateField("equipment_category", event.target.value || undefined)
+                        }
+                        className="h-8 text-sm"
+                      >
+                        <option value="">Any</option>
+                        {EQUIPMENT_CATEGORY_OPTIONS.map((value) => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+
+                    <div className="col-span-2 space-y-1">
+                      <Label htmlFor="refrigerant_type" className="text-[11px] text-muted-foreground">
+                        Refrigerant
+                      </Label>
+                      <Select
+                        id="refrigerant_type"
+                        value={form.refrigerant_type ?? ""}
+                        onChange={(event) =>
+                          updateField("refrigerant_type", event.target.value || undefined)
+                        }
+                        className="h-8 text-sm"
+                      >
+                        <option value="">Any</option>
+                        {REFRIGERANT_OPTIONS.map((value) => (
+                          <option key={value} value={value}>
+                            {value}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="query" className="text-[11px] text-muted-foreground">
+                      Search hint
+                    </Label>
+                    <Input
+                      id="query"
+                      placeholder="modulating, ECM…"
+                      value={form.query ?? ""}
+                      onChange={(event) => updateField("query", event.target.value || undefined)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-md border px-2.5 py-1.5">
+                    <Label htmlFor="criteria_prefer_seer" className="text-xs">
+                      Prefer higher SEER
+                    </Label>
+                    <Switch
+                      id="criteria_prefer_seer"
+                      checked={form.prefer_higher_seer ?? true}
+                      onCheckedChange={(checked) => updateField("prefer_higher_seer", checked)}
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="h-8 w-full"
+                    disabled={isInitialCriteriaLoading}
+                  >
+                    {isInitialCriteriaLoading ? (
                       <>
-                        Matched {componentTypeLabel(matchedType)}{" "}
-                        <span className="font-mono font-medium text-foreground">{matchedModel}</span>
+                        <Loader2 className="animate-spin" />
+                        Finding…
                       </>
                     ) : (
-                      <>Searching for model "{productFirstPage?.query ?? productForm.model}"</>
+                      <>
+                        <Sparkles />
+                        Recommend
+                      </>
                     )}
-                  </p>
-                </div>
-                {productMeta && (
-                  <p className="text-sm text-muted-foreground">
-                    {productTotal} certified matchup{productTotal === 1 ? "" : "s"}
-                  </p>
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </aside>
+
+          <section className="space-y-4">
+            {isCriteriaMode && (
+              <>
+                <SectionHeading
+                  title="Recommended systems"
+                  detail={`${PAGE_SIZE} per batch`}
+                  count={
+                    criteriaMeta
+                      ? `${recommendations.length} / ${criteriaTotal}`
+                      : undefined
+                  }
+                />
+
+                {isCriteriaError && (
+                  <Alert variant="destructive" className="py-2">
+                    <AlertTitle className="text-sm">Could not load recommendations</AlertTitle>
+                    <AlertDescription className="text-xs">
+                      {criteriaError instanceof Error ? criteriaError.message : "Unknown error"}
+                    </AlertDescription>
+                  </Alert>
                 )}
-              </div>
 
-              <Separator />
-
-              {isProductError && (
-                <Alert variant="destructive">
-                  <AlertTitle>Could not search products</AlertTitle>
-                  <AlertDescription>
-                    {productError instanceof Error ? productError.message : "Unknown error"}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {isInitialProductLoading && (
-                <div className="space-y-4">
-                  {[1, 2].map((item) => (
-                    <Card key={item}>
-                      <CardContent className="space-y-3 pt-6">
-                        <Skeleton className="h-5 w-1/3" />
-                        <Skeleton className="h-4 w-2/3" />
-                        <Skeleton className="h-24 w-full" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {!isInitialProductLoading && productMatchups.length === 0 && !isProductError && (
-                <Alert>
-                  <AlertTitle>No matchups found</AlertTitle>
-                  <AlertDescription>
-                    Check the model number spelling or try auto-detect instead of a specific
-                    component type.
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {!isInitialProductLoading && boughtTogether.length > 0 && (
-                <BoughtTogetherSection items={boughtTogether} searchedType={matchedType} />
-              )}
-
-              {!isInitialProductLoading && productMatchups.length > 0 && (
-                <>
-                  <div>
-                    <h3 className="text-lg font-semibold">Similar matchups</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Full AHRI-certified systems that include your searched component
-                    </p>
+                {isInitialCriteriaLoading && (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((item) => (
+                      <Skeleton key={item} className="h-24 w-full rounded-lg" />
+                    ))}
                   </div>
+                )}
 
-                  <div className="space-y-4">
-                    {productMatchups.map((recommendation, index) => (
+                {!isInitialCriteriaLoading && recommendations.length === 0 && !isCriteriaError && (
+                  <Alert className="py-2">
+                    <AlertTitle className="text-sm">No matches</AlertTitle>
+                    <AlertDescription className="text-xs">
+                      Relax SEER, category, or refrigerant filters.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {recommendations.length > 0 && (
+                  <div className="space-y-2 overflow-visible">
+                    {recommendations.map((recommendation, index) => (
                       <SystemCard
                         key={recommendation.system.id}
                         recommendation={recommendation}
@@ -577,46 +507,163 @@ export default function App() {
                       />
                     ))}
                   </div>
+                )}
 
-                  <div ref={productLoadMoreRef} className="flex justify-center py-4">
-                    {isFetchingNextProductPage ? (
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin" />
-                        Loading more…
-                      </div>
-                    ) : hasNextProductPage ? (
-                      <Button type="button" variant="outline" onClick={() => fetchNextProductPage()}>
+                {recommendations.length > 0 && (
+                  <div ref={loadMoreRef} className="flex justify-center py-2">
+                    {isFetchingNextCriteriaPage ? (
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <Loader2 className="size-3.5 animate-spin" />
+                        Loading…
+                      </span>
+                    ) : hasNextCriteriaPage ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => fetchNextCriteriaPage()}
+                      >
                         Load {PAGE_SIZE} more
                       </Button>
                     ) : (
-                      <p className="text-sm text-muted-foreground">All matchups loaded</p>
+                      <span className="text-xs text-muted-foreground">All loaded</span>
                     )}
                   </div>
-                </>
-              )}
-            </>
-          )}
+                )}
+              </>
+            )}
 
-          {!hasSearched && (
-            <Card className="border-dashed">
-              <CardContent className="flex min-h-48 flex-col items-center justify-center gap-2 py-10 text-center">
-                <Sparkles className="size-8 text-muted-foreground" />
-                <p className="font-medium">No search yet</p>
-                <p className="max-w-md text-sm text-muted-foreground">
-                  Use system criteria to find bundles by tonnage and SEER, or search by outdoor,
-                  coil, or furnace model number to see certified matchups and compatible parts.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+            {isProductMode && (
+              <>
+                <SectionHeading
+                  title="Product search"
+                  detail={
+                    matchedModel
+                      ? `${componentTypeLabel(matchedType)} · ${matchedModel}`
+                      : `Model ${productFirstPage?.query ?? productForm.model}`
+                  }
+                  count={
+                    productMeta
+                      ? `${productTotal} matchup${productTotal === 1 ? "" : "s"}`
+                      : undefined
+                  }
+                />
 
-          <SystemDetailModal
-            open={selected != null}
-            recommendation={selected?.recommendation ?? null}
-            rank={selected?.rank ?? 0}
-            onClose={() => setSelected(null)}
-          />
-        </section>
+                {isProductError && (
+                  <Alert variant="destructive" className="py-2">
+                    <AlertTitle className="text-sm">Search failed</AlertTitle>
+                    <AlertDescription className="text-xs">
+                      {productError instanceof Error ? productError.message : "Unknown error"}
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {isInitialProductLoading && (
+                  <div className="flex gap-3">
+                    {[1, 2].map((item) => (
+                      <Skeleton key={item} className="h-28 w-64 shrink-0 rounded-lg" />
+                    ))}
+                  </div>
+                )}
+
+                {!isInitialProductLoading && productMatchups.length === 0 && !isProductError && (
+                  <Alert className="py-2">
+                    <AlertTitle className="text-sm">No matchups</AlertTitle>
+                    <AlertDescription className="text-xs">
+                      Check model spelling or try auto-detect.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {!isInitialProductLoading && boughtTogether.length > 0 && (
+                  <BoughtTogetherSection
+                    items={boughtTogether}
+                    searchedType={matchedType}
+                    onItemClick={
+                      canShowPairedMatchups ? (item) => setPairedMatchupItem(item) : undefined
+                    }
+                  />
+                )}
+
+                {!isInitialProductLoading && productMatchups.length > 0 && (
+                  <>
+                    <SectionHeading title="Similar matchups" />
+
+                    <CardCarousel
+                      ariaLabel="Similar matchups"
+                      slideClassName="w-[min(100%,18rem)] sm:w-[20rem]"
+                    >
+                      {productMatchups.map((recommendation, index) => (
+                        <SystemCard
+                          key={recommendation.system.id}
+                          recommendation={recommendation}
+                          rank={index + 1}
+                          onClick={() => setSelected({ recommendation, rank: index + 1 })}
+                        />
+                      ))}
+                    </CardCarousel>
+
+                    <div ref={productLoadMoreRef} className="flex justify-center py-2">
+                      {isFetchingNextProductPage ? (
+                        <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <Loader2 className="size-3.5 animate-spin" />
+                          Loading…
+                        </span>
+                      ) : hasNextProductPage ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => fetchNextProductPage()}
+                        >
+                          Load {PAGE_SIZE} more
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">All loaded</span>
+                      )}
+                    </div>
+                  </>
+                )}
+              </>
+            )}
+
+            {!hasSearched && (
+              <Card className="border-dashed py-0 shadow-none">
+                <CardContent className="flex min-h-32 flex-col items-center justify-center gap-1.5 py-8 text-center">
+                  <Sparkles className="size-5 text-muted-foreground" />
+                  <p className="text-sm font-medium">Start a search</p>
+                  <p className="max-w-sm text-xs text-muted-foreground">
+                    Use criteria filters or search by model number in the header.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
+            <BoughtTogetherMatchupsModal
+              open={pairedMatchupItem != null && canShowPairedMatchups}
+              onClose={() => setPairedMatchupItem(null)}
+              anchorType={pairedAnchorType as "outdoor" | "coil" | "furnace"}
+              anchorModel={matchedModel ?? ""}
+              item={pairedMatchupItem}
+              equipmentCategory={activeProductSearch?.equipment_category}
+              refrigerantType={activeProductSearch?.refrigerant_type}
+              preferHigherSeer={productForm.prefer_higher_seer}
+              onSelectMatchup={(recommendation, rank) => {
+                setPairedMatchupItem(null)
+                setSelected({ recommendation, rank })
+              }}
+            />
+
+            <SystemDetailModal
+              open={selected != null}
+              recommendation={selected?.recommendation ?? null}
+              rank={selected?.rank ?? 0}
+              onClose={() => setSelected(null)}
+            />
+          </section>
+        </div>
       </main>
     </div>
   )

@@ -46,6 +46,8 @@ FIELD_LABELS: dict[str, str] = {
     "furnace_btu": "Furnace BTU",
     "blower_type": "Blower Type",
     "description": "Description",
+    "equipment_category": "Equipment Category",
+    "refrigerant_type": "Refrigerant Type",
     "file": "File",
     "created_at": "Created At",
     "updated_at": "Updated At",
@@ -106,6 +108,8 @@ def system_to_schema(system: HvacSystem) -> HvacSystemOut:
         blower_type=system.blower_type,
         description=system.description,
         model_status=system.model_status,
+        equipment_category=system.equipment_category,
+        refrigerant_type=system.refrigerant_type,
         outdoor_model=outdoor,
         coil_model=coil,
         furnace_model=system.furnace_model_revision,
@@ -127,22 +131,11 @@ def _apply_filters(query, params: HvacSearchRequest):
     if params.max_seer is not None:
         query = query.filter(HvacSystem.seer <= params.max_seer)
 
-    if params.config:
-        query = query.filter(HvacSystem.config.ilike(f"%{params.config.strip()}%"))
+    if params.equipment_category:
+        query = query.filter(HvacSystem.equipment_category == params.equipment_category.strip())
 
-    if params.system_type_seer2:
-        query = query.filter(
-            HvacSystem.system_type_seer2.ilike(f"%{params.system_type_seer2.strip()}%")
-        )
-
-    if params.stage:
-        query = query.filter(HvacSystem.stage.ilike(f"%{params.stage.strip()}%"))
-
-    if params.indoor_unit:
-        query = query.filter(HvacSystem.indoor_unit.ilike(f"%{params.indoor_unit.strip()}%"))
-
-    if params.furnace_btu:
-        query = query.filter(HvacSystem.furnace_btu == params.furnace_btu.strip())
+    if params.refrigerant_type:
+        query = query.filter(HvacSystem.refrigerant_type == params.refrigerant_type.strip())
 
     if params.outdoor_model:
         model = params.outdoor_model.strip()
