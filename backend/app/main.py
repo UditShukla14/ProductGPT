@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,6 +13,8 @@ from app.knowledge_graph.neo4j_client import neo4j_client
 from app.knowledge_graph.store import graph_store
 from app.models.hvac_system import HvacSystem
 
+logger = logging.getLogger(__name__)
+
 
 def seed_hvac_data_if_needed() -> None:
     db = SessionLocal()
@@ -20,9 +23,14 @@ def seed_hvac_data_if_needed() -> None:
         if count == 0:
             xlsx_path = settings.default_goodman_ratings_xlsx
             if xlsx_path.exists():
+                logger.info("Seeding HVAC data from %s", xlsx_path)
                 ingest_goodman_ratings(db, xlsx_path, replace=True)
+            else:
+                logger.warning("No seed xlsx at %s — skipping ingest", xlsx_path)
+        logger.info("Rebuilding knowledge graph (%s systems in DB)", db.query(HvacSystem).count())
         graph_store.connect_neo4j()
         graph_store.rebuild(db)
+        logger.info("Knowledge graph ready (backend=%s)", graph_store.backend)
     finally:
         db.close()
 
@@ -30,6 +38,7 @@ def seed_hvac_data_if_needed() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Path(settings.default_goodman_ratings_xlsx).parent.mkdir(parents=True, exist_ok=True)
+    logger.info("Initializing database")
     init_db()
     seed_hvac_data_if_needed()
     yield

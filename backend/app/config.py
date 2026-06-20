@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
@@ -15,7 +15,10 @@ class Settings(BaseSettings):
     default_goodman_ratings_xlsx: Path = (
         PROJECT_ROOT / "data" / "Goodman November Ratings_cleaned.xlsx"
     )
-    cors_origins: list[str] = ["http://localhost:5173", "http://localhost:3000"]
+    cors_origins: Annotated[list[str], NoDecode] = [
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ]
 
     @field_validator("cors_origins", mode="before")
     @classmethod

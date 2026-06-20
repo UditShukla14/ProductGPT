@@ -1,6 +1,12 @@
 #!/bin/sh
 set -e
 
+mkdir -p /app/data
+if [ -d /app/seed-data ]; then
+  echo "Ensuring seed data files exist in /app/data..."
+  cp -rn /app/seed-data/. /app/data/ 2>/dev/null || true
+fi
+
 if [ "${NEO4J_ENABLED:-true}" = "true" ]; then
   echo "Waiting for Neo4j at ${NEO4J_URI:-bolt://neo4j:7687}..."
   for i in $(seq 1 30); do

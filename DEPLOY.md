@@ -57,7 +57,9 @@ nano .env   # change NEO4J_PASSWORD and CORS_ORIGINS to your droplet IP/domain
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 
-First startup takes 1–2 minutes (Neo4j boot + Excel seed into SQLite + graph sync).
+First startup can take **3–5 minutes** (Neo4j boot + Excel seed into SQLite + Neo4j graph sync). The backend healthcheck allows up to 5 minutes before marking unhealthy.
+
+**Important**: The `app_data` Docker volume persists SQLite across restarts. Seed Excel files are copied from the image on each container start if missing from the volume.
 
 ## 4. Verify
 
@@ -85,7 +87,28 @@ apt-get install -y certbot
 
 Simplest option: put **DigitalOcean Load Balancer** or **Cloudflare** in front for TLS termination.
 
-## 6. Useful commands
+## 6. Troubleshooting
+
+### Backend unhealthy on first deploy
+
+The API does not respond to `/api/v1/health` until startup finishes (Excel ingest + Neo4j graph sync). Wait up to 5 minutes, then check logs:
+
+```bash
+docker compose -f docker-compose.prod.yml logs backend --tail 100
+```
+
+Look for `Seeding HVAC data`, `Rebuilding knowledge graph`, and `Knowledge graph ready`.
+
+**Neo4j password mismatch**: `NEO4J_PASSWORD` in `.env` only applies when the `neo4j_data` volume is first created. If you change the password later, either reset the volume (`docker compose -f docker-compose.prod.yml down -v` — **deletes graph data**) or update the password inside Neo4j to match `.env`.
+
+**Fresh start** (wipes SQLite + Neo4j data):
+
+```bash
+docker compose -f docker-compose.prod.yml down -v
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+## 7. Useful commands
 
 ```bash
 # Restart after code update
