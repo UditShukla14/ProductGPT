@@ -16,6 +16,7 @@ class Settings(BaseSettings):
         PROJECT_ROOT / "data" / "Goodman November Ratings_cleaned.xlsx"
     )
     default_shopify_products_csv: Path = PROJECT_ROOT / "data" / "products_export_1.csv"
+    default_r32_engineering_xlsx: Path = PROJECT_ROOT / "data" / "R32_Engineering_file.xlsx"
     cors_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:5173",
         "http://localhost:3000",

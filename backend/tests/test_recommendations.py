@@ -21,11 +21,19 @@ def test_seed_and_recommend(tmp_path=None):
 
         search_result, meta = search_hvac_systems(
             db,
-            HvacSearchRequest(tonnage=2.0, min_seer=15, limit=5),
+            HvacSearchRequest(tonnage=2.0, min_seer=15, flow="Horizontal", limit=5),
         )
         assert meta["total"] > 0
         assert all(s.tonnage == 2.0 for s in search_result)
         assert all(s.seer >= 15 for s in search_result if s.seer is not None)
+        assert all(s.indoor_type == "Horizontal" for s in search_result if s.indoor_type)
+
+        coil_search, coil_meta = search_hvac_systems(
+            db,
+            HvacSearchRequest(coil_width="30", limit=5),
+        )
+        assert coil_meta["total"] > 0
+        assert all(s.coil_width == "30" for s in coil_search if s.coil_width)
 
         recs = recommend_hvac_systems(
             db,

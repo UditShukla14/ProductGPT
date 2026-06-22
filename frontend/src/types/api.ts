@@ -4,6 +4,12 @@ export interface HvacComponent {
   image_url?: string | null
 }
 
+export interface HvacAccessory {
+  sku: string
+  description?: string | null
+  source_model?: string | null
+}
+
 export interface HvacSystem {
   id: number
   source_row_id: string | null
@@ -22,6 +28,8 @@ export interface HvacSystem {
   indoor_type: string | null
   furnace_btu: string | null
   cabinet_width: string | null
+  coil_width: string | null
+  furnace_width: string | null
   blower_type: string | null
   description: string | null
   model_status: string | null
@@ -32,6 +40,7 @@ export interface HvacSystem {
   coil_model: string | null
   furnace_model: string | null
   components: HvacComponent[]
+  accessories?: HvacAccessory[]
   all_fields?: Record<string, string>
 }
 
@@ -41,6 +50,9 @@ export interface HvacRecommendationRequest {
   max_seer?: number
   equipment_category?: string
   refrigerant_type?: string
+  flow?: string
+  coil_width?: string
+  furnace_width?: string
   query?: string
   limit?: number
   offset?: number
@@ -84,6 +96,9 @@ export interface ComponentSearchRequest {
   component_type?: ComponentType
   equipment_category?: string
   refrigerant_type?: string
+  flow?: string
+  coil_width?: string
+  furnace_width?: string
   limit?: number
   offset?: number
   prefer_higher_seer?: boolean
@@ -121,6 +136,9 @@ export interface PairedMatchupsRequest {
   paired_model: string
   equipment_category?: string
   refrigerant_type?: string
+  flow?: string
+  coil_width?: string
+  furnace_width?: string
   limit?: number
   offset?: number
   prefer_higher_seer?: boolean

@@ -16,6 +16,7 @@ class ShopifyProduct(Base):
     handle: Mapped[str | None] = mapped_column(String(255), nullable=True)
     title: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cabinet_width: Mapped[str | None] = mapped_column(String(32), nullable=True)
     ahri_number: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
     price: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str | None] = mapped_column(String(32), nullable=True)

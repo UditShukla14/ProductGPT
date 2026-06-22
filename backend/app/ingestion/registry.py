@@ -3,12 +3,14 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from app.ingestion.goodman_ratings import SOURCE_TYPE as GOODMAN_SOURCE_TYPE, ingest_goodman_ratings
+from app.ingestion.r32_engineering import SOURCE_TYPE as R32_ENGINEERING_SOURCE_TYPE, ingest_r32_engineering
 from app.ingestion.shopify_products import SOURCE_TYPE as SHOPIFY_SOURCE_TYPE, ingest_shopify_products
 from app.knowledge_graph.store import graph_store
 
 HANDLERS = {
     GOODMAN_SOURCE_TYPE: ingest_goodman_ratings,
     SHOPIFY_SOURCE_TYPE: ingest_shopify_products,
+    R32_ENGINEERING_SOURCE_TYPE: ingest_r32_engineering,
 }
 
 

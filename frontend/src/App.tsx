@@ -1,22 +1,19 @@
 import { useEffect, useRef, useState } from "react"
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Loader2, Search, Sparkles } from "lucide-react"
+import { Loader2, Sparkles } from "lucide-react"
 
 import { AppHeader } from "@/components/AppHeader"
 import { BoughtTogetherMatchupsModal } from "@/components/BoughtTogetherMatchupsModal"
 import { BoughtTogetherSection } from "@/components/BoughtTogetherSection"
 import { CardCarousel } from "@/components/CardCarousel"
+import { SearchSidebar, type SidebarSearchMode } from "@/components/SearchSidebar"
 import { SystemCard } from "@/components/SystemCard"
 import { SystemDetailModal } from "@/components/SystemDetailModal"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select } from "@/components/ui/select"
+import { Card, CardContent } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Switch } from "@/components/ui/switch"
-import { EQUIPMENT_CATEGORY_OPTIONS, REFRIGERANT_OPTIONS, componentTypeLabel } from "@/constants/hvac"
+import { DEFAULT_REFRIGERANT, componentTypeLabel } from "@/constants/hvac"
 import { fetchComponentSearch, fetchRecommendations } from "@/lib/api"
 import type {
   BoughtTogetherItem,
@@ -38,6 +35,9 @@ type ProductSearchForm = {
   component_type: ComponentType
   equipment_category?: string
   refrigerant_type?: string
+  flow?: string
+  coil_width?: string
+  furnace_width?: string
   prefer_higher_seer: boolean
 }
 
@@ -45,13 +45,14 @@ const defaultForm: SearchForm = {
   tonnage: 2,
   min_seer: 15,
   equipment_category: "AC",
-  refrigerant_type: "R-32",
+  refrigerant_type: DEFAULT_REFRIGERANT,
   prefer_higher_seer: true,
 }
 
 const defaultProductForm: ProductSearchForm = {
   model: "",
   component_type: "auto",
+  refrigerant_type: DEFAULT_REFRIGERANT,
   prefer_higher_seer: true,
 }
 
@@ -62,6 +63,9 @@ function buildSearchPayload(form: SearchForm): HvacRecommendationRequest {
     max_seer: form.max_seer || undefined,
     equipment_category: form.equipment_category || undefined,
     refrigerant_type: form.refrigerant_type || undefined,
+    flow: form.flow || undefined,
+    coil_width: form.coil_width || undefined,
+    furnace_width: form.furnace_width || undefined,
     query: form.query || undefined,
     prefer_higher_seer: form.prefer_higher_seer,
   }
@@ -91,6 +95,7 @@ function SectionHeading({
 
 export default function App() {
   const queryClient = useQueryClient()
+  const [sidebarMode, setSidebarMode] = useState<SidebarSearchMode>("criteria")
   const [form, setForm] = useState<SearchForm>(defaultForm)
   const [productForm, setProductForm] = useState<ProductSearchForm>(defaultProductForm)
   const [activeMode, setActiveMode] = useState<SearchMode | null>(null)
@@ -111,7 +116,6 @@ export default function App() {
   const [isLoadingMoreCriteria, setIsLoadingMoreCriteria] = useState(false)
   const activeSearchRef = useRef<HvacRecommendationRequest | null>(null)
   const activeProductSearchRef = useRef<ComponentSearchRequest | null>(null)
-  const productLoadMoreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const header = document.getElementById("app-header")
@@ -191,27 +195,6 @@ export default function App() {
     isFetchingNextPage: isFetchingNextProductPage,
   } = productQuery
 
-  useEffect(() => {
-    const target = productLoadMoreRef.current
-    if (!target || !hasNextProductPage || isFetchingNextProductPage || isProductFetching) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) fetchNextProductPage()
-      },
-      { rootMargin: "200px" }
-    )
-
-    observer.observe(target)
-    return () => observer.disconnect()
-  }, [
-    fetchNextProductPage,
-    hasNextProductPage,
-    isFetchingNextProductPage,
-    isProductFetching,
-    productData,
-  ])
-
   function updateField<K extends keyof SearchForm>(key: K, value: SearchForm[K]) {
     setForm((current) => ({ ...current, [key]: value }))
   }
@@ -233,8 +216,18 @@ export default function App() {
     setIsLoadingMoreCriteria(false)
     setActiveSearch(payload)
     setActiveMode("criteria")
+    setSidebarMode("criteria")
     setSearchKey((key) => key + 1)
     setSelected(null)
+  }
+
+  function handleProductComponentTypeChange(value: ComponentType) {
+    setProductForm((current) => ({
+      ...current,
+      component_type: value,
+      coil_width: value === "coil" ? current.coil_width : undefined,
+      furnace_width: value === "furnace" ? current.furnace_width : undefined,
+    }))
   }
 
   function handleProductSubmit(event: React.FormEvent) {
@@ -247,11 +240,16 @@ export default function App() {
       component_type: productForm.component_type,
       equipment_category: productForm.equipment_category,
       refrigerant_type: productForm.refrigerant_type,
+      flow: productForm.flow,
+      coil_width: productForm.component_type === "coil" ? productForm.coil_width : undefined,
+      furnace_width:
+        productForm.component_type === "furnace" ? productForm.furnace_width : undefined,
       prefer_higher_seer: productForm.prefer_higher_seer,
     }
     activeProductSearchRef.current = payload
     setActiveProductSearch(payload)
     setActiveMode("product")
+    setSidebarMode("product")
     setProductSearchKey((key) => key + 1)
     setSelected(null)
     setPairedMatchupItem(null)
@@ -286,179 +284,24 @@ export default function App() {
 
   return (
     <div className="min-h-svh w-full max-w-[100vw] overflow-x-clip bg-background">
-      <AppHeader
-        productModel={productForm.model}
-        componentType={productForm.component_type}
-        equipmentCategory={productForm.equipment_category}
-        refrigerantType={productForm.refrigerant_type}
-        preferHigherSeer={productForm.prefer_higher_seer}
-        isProductSearching={isInitialProductLoading}
-        onProductModelChange={(value) => updateProductField("model", value)}
-        onComponentTypeChange={(value) => updateProductField("component_type", value)}
-        onEquipmentCategoryChange={(value) => updateProductField("equipment_category", value)}
-        onRefrigerantTypeChange={(value) => updateProductField("refrigerant_type", value)}
-        onPreferHigherSeerChange={(value) => updateProductField("prefer_higher_seer", value)}
-        onProductSubmit={handleProductSubmit}
-      />
+      <AppHeader />
 
-      <main className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-6 lg:flex lg:h-[calc(100dvh-var(--app-header-height,10rem))] lg:flex-col lg:overflow-hidden lg:py-4">
+      <main className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-6 lg:flex lg:h-[calc(100dvh-var(--app-header-height,4rem))] lg:flex-col lg:overflow-hidden lg:py-4">
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
           <aside className="min-w-0 shrink-0 lg:sticky lg:top-0 lg:self-start lg:overflow-y-auto lg:overscroll-y-contain">
-            <Card className="gap-0 py-0 shadow-none">
-              <CardHeader className="gap-1 px-4 py-3">
-                <CardTitle className="flex items-center gap-1.5 text-sm">
-                  <Search className="size-3.5" />
-                  System criteria
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4">
-                <form className="space-y-3" onSubmit={handleCriteriaSubmit}>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="col-span-2 space-y-1">
-                      <Label htmlFor="tonnage" className="text-[11px] text-muted-foreground">
-                        Tonnage
-                      </Label>
-                      <Select
-                        id="tonnage"
-                        value={String(form.tonnage ?? "")}
-                        onChange={(event) =>
-                          updateField("tonnage", Number(event.target.value) || undefined)
-                        }
-                        className="h-8 text-sm"
-                      >
-                        <option value="">Any</option>
-                        {[1.5, 2, 2.5, 3, 3.5, 4, 5].map((value) => (
-                          <option key={value} value={value}>
-                            {value} Ton
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label htmlFor="min_seer" className="text-[11px] text-muted-foreground">
-                        Min SEER
-                      </Label>
-                      <Input
-                        id="min_seer"
-                        type="number"
-                        step="0.1"
-                        min={0}
-                        placeholder="15"
-                        value={form.min_seer ?? ""}
-                        onChange={(event) =>
-                          updateField("min_seer", Number(event.target.value) || undefined)
-                        }
-                        className="h-8 text-sm"
-                      />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label htmlFor="max_seer" className="text-[11px] text-muted-foreground">
-                        Max SEER
-                      </Label>
-                      <Input
-                        id="max_seer"
-                        type="number"
-                        step="0.1"
-                        min={0}
-                        placeholder="Any"
-                        value={form.max_seer ?? ""}
-                        onChange={(event) =>
-                          updateField("max_seer", Number(event.target.value) || undefined)
-                        }
-                        className="h-8 text-sm"
-                      />
-                    </div>
-
-                    <div className="col-span-2 space-y-1">
-                      <Label htmlFor="equipment_category" className="text-[11px] text-muted-foreground">
-                        Category
-                      </Label>
-                      <Select
-                        id="equipment_category"
-                        value={form.equipment_category ?? ""}
-                        onChange={(event) =>
-                          updateField("equipment_category", event.target.value || undefined)
-                        }
-                        className="h-8 text-sm"
-                      >
-                        <option value="">Any</option>
-                        {EQUIPMENT_CATEGORY_OPTIONS.map((value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-
-                    <div className="col-span-2 space-y-1">
-                      <Label htmlFor="refrigerant_type" className="text-[11px] text-muted-foreground">
-                        Refrigerant
-                      </Label>
-                      <Select
-                        id="refrigerant_type"
-                        value={form.refrigerant_type ?? ""}
-                        onChange={(event) =>
-                          updateField("refrigerant_type", event.target.value || undefined)
-                        }
-                        className="h-8 text-sm"
-                      >
-                        <option value="">Any</option>
-                        {REFRIGERANT_OPTIONS.map((value) => (
-                          <option key={value} value={value}>
-                            {value}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="query" className="text-[11px] text-muted-foreground">
-                      Search hint
-                    </Label>
-                    <Input
-                      id="query"
-                      placeholder="modulating, ECM…"
-                      value={form.query ?? ""}
-                      onChange={(event) => updateField("query", event.target.value || undefined)}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between rounded-md border px-2.5 py-1.5">
-                    <Label htmlFor="criteria_prefer_seer" className="text-xs">
-                      Prefer higher SEER
-                    </Label>
-                    <Switch
-                      id="criteria_prefer_seer"
-                      checked={form.prefer_higher_seer ?? true}
-                      onCheckedChange={(checked) => updateField("prefer_higher_seer", checked)}
-                    />
-                  </div>
-
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="h-8 w-full"
-                    disabled={isInitialCriteriaLoading}
-                  >
-                    {isInitialCriteriaLoading ? (
-                      <>
-                        <Loader2 className="animate-spin" />
-                        Finding…
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles />
-                        Recommend
-                      </>
-                    )}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+            <SearchSidebar
+              sidebarMode={sidebarMode}
+              onSidebarModeChange={setSidebarMode}
+              criteriaForm={form}
+              productForm={productForm}
+              isCriteriaLoading={isInitialCriteriaLoading}
+              isProductLoading={isInitialProductLoading}
+              onCriteriaFieldChange={updateField}
+              onProductFieldChange={updateProductField}
+              onProductComponentTypeChange={handleProductComponentTypeChange}
+              onCriteriaSubmit={handleCriteriaSubmit}
+              onProductSubmit={handleProductSubmit}
+            />
           </aside>
 
           <section className="min-h-0 min-w-0 space-y-4 overflow-y-auto overscroll-y-contain lg:max-h-full lg:pr-1">
@@ -544,7 +387,7 @@ export default function App() {
                   title="Product search"
                   detail={
                     matchedModel
-                      ? `${componentTypeLabel(matchedType)} · ${matchedModel}`
+                      ? `${componentTypeLabel(matchedType, activeProductSearch?.equipment_category)} · ${matchedModel}`
                       : `Model ${productFirstPage?.query ?? productForm.model}`
                   }
                   count={
@@ -612,7 +455,7 @@ export default function App() {
                       ))}
                     </CardCarousel>
 
-                    <div ref={productLoadMoreRef} className="flex justify-center py-2">
+                    <div className="flex justify-center py-2">
                       {isFetchingNextProductPage ? (
                         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                           <Loader2 className="size-3.5 animate-spin" />
@@ -643,7 +486,7 @@ export default function App() {
                   <Sparkles className="size-5 text-muted-foreground" />
                   <p className="text-sm font-medium">Start a search</p>
                   <p className="max-w-sm text-xs text-muted-foreground">
-                    Use criteria filters or search by model number in the header.
+                    Use the sidebar to search by requirements or model number.
                   </p>
                 </CardContent>
               </Card>
@@ -657,6 +500,9 @@ export default function App() {
               item={pairedMatchupItem}
               equipmentCategory={activeProductSearch?.equipment_category}
               refrigerantType={activeProductSearch?.refrigerant_type}
+              flow={activeProductSearch?.flow}
+              coilWidth={activeProductSearch?.coil_width}
+              furnaceWidth={activeProductSearch?.furnace_width}
               preferHigherSeer={productForm.prefer_higher_seer}
               onSelectMatchup={(recommendation, rank) => {
                 setPairedMatchupItem(null)

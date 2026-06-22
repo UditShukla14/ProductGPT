@@ -9,6 +9,7 @@ from app.schemas.recommendations import (
 from app.services.hvac_search import _apply_filters, system_to_schema
 from app.services.product_images import load_sku_image_map
 from app.services.scoring import normalize_recommendation_scores
+from app.services.width_resolution import normalize_width
 from app.models.hvac_system import HvacSystem
 
 
@@ -40,16 +41,25 @@ def _score_system(system: HvacSystem, request: HvacRecommendationRequest) -> tup
         score += 15
         reasons.append(f"refrigerant: {system.refrigerant_type}")
 
-    if request.query and system.search_text:
-        query_lower = request.query.lower()
-        matches = sum(
-            1
-            for token in query_lower.split()
-            if token and token in system.search_text.lower()
-        )
-        if matches:
-            score += min(matches * 3, 15)
-            reasons.append(f"matches query terms ({matches})")
+    if (
+        request.flow
+        and system.indoor_type
+        and request.flow.lower() == system.indoor_type.lower()
+    ):
+        score += 15
+        reasons.append(f"flow: {system.indoor_type}")
+
+    if request.coil_width and system.coil_width:
+        requested_coil_width = normalize_width(request.coil_width)
+        if requested_coil_width and requested_coil_width == system.coil_width:
+            score += 10
+            reasons.append(f"coil width: {system.coil_width}\"")
+
+    if request.furnace_width and system.furnace_width:
+        requested_furnace_width = normalize_width(request.furnace_width)
+        if requested_furnace_width and requested_furnace_width == system.furnace_width:
+            score += 10
+            reasons.append(f"furnace width: {system.furnace_width}\"")
 
     if request.prefer_higher_seer and system.seer is not None:
         score += min(system.seer, 20)
@@ -69,7 +79,9 @@ def recommend_hvac_systems(
         max_seer=request.max_seer,
         equipment_category=request.equipment_category,
         refrigerant_type=request.refrigerant_type,
-        query=request.query,
+        flow=request.flow,
+        coil_width=request.coil_width,
+        furnace_width=request.furnace_width,
         active_only=True,
         page=1,
         limit=500,

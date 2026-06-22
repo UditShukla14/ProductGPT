@@ -4,8 +4,10 @@ from sqlalchemy import Float, cast, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.hvac_system import HvacSystem
-from app.schemas.hvac import HvacComponent, HvacSearchRequest, HvacSystemOut
+from app.schemas.hvac import HvacAccessory, HvacComponent, HvacSearchRequest, HvacSystemOut
 from app.services.product_images import load_sku_image_map, resolve_image_for_model
+from app.services.accessories import parse_system_accessories
+from app.services.width_resolution import normalize_width
 
 FIELD_LABELS: dict[str, str] = {
     "id": "Row ID",
@@ -41,6 +43,8 @@ FIELD_LABELS: dict[str, str] = {
     "stage": "Stage",
     "indoor_unit": "Indoor Unit",
     "indoor_type": "Indoor Type",
+    "coil_width": "Coil Width",
+    "furnace_width": "Furnace Width",
     "config": "Configuration",
     "cabinet_width": "Cabinet Width",
     "ext_txv": "Ext TXV",
@@ -126,6 +130,8 @@ def system_to_schema(
         config=system.config,
         indoor_unit=system.indoor_unit,
         indoor_type=system.indoor_type,
+        coil_width=system.coil_width,
+        furnace_width=system.furnace_width,
         furnace_btu=system.furnace_btu,
         cabinet_width=system.cabinet_width,
         blower_type=system.blower_type,
@@ -138,6 +144,14 @@ def system_to_schema(
         coil_model=coil,
         furnace_model=system.furnace_model_revision,
         components=components,
+        accessories=[
+            HvacAccessory(
+                sku=item["sku"],
+                description=item.get("description"),
+                source_model=item.get("source_model"),
+            )
+            for item in parse_system_accessories(system)
+        ],
         all_fields=_parse_all_fields(system.raw_json),
     )
 
@@ -160,6 +174,19 @@ def _apply_filters(query, params: HvacSearchRequest):
 
     if params.refrigerant_type:
         query = query.filter(HvacSystem.refrigerant_type == params.refrigerant_type.strip())
+
+    if params.flow:
+        query = query.filter(func.lower(HvacSystem.indoor_type) == params.flow.strip().lower())
+
+    if params.coil_width:
+        coil_width = normalize_width(params.coil_width)
+        if coil_width:
+            query = query.filter(HvacSystem.coil_width == coil_width)
+
+    if params.furnace_width:
+        furnace_width = normalize_width(params.furnace_width)
+        if furnace_width:
+            query = query.filter(HvacSystem.furnace_width == furnace_width)
 
     if params.outdoor_model:
         model = params.outdoor_model.strip()

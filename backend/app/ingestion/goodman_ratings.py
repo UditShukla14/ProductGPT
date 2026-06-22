@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.hvac_system import HvacSystem
 from app.models.knowledge_source import KnowledgeSource
+from app.services.width_resolution import coil_width_from_model
 
 SOURCE_TYPE = "goodman_ratings"
 HEADER_MARKER = "AHRI Certified Reference Number"
@@ -179,6 +180,7 @@ def _row_to_hvac_system(
     ahri_type = _normalize_model(_get_field(row, "ahri_type"))
     series = _normalize_model(_get_field(row, "series_name"))
     refrigerant_type = _normalize_model(_get_field(row, "refrigerant"))
+    coil_type = _normalize_model(_get_field(row, "coil_type"))
 
     enriched = {
         **row,
@@ -218,8 +220,10 @@ def _row_to_hvac_system(
         cond_seer=str(int(seer2)) if seer2 is not None else None,
         stage=None,
         indoor_unit=_normalize_model(_get_field(row, "indoor_brand")),
-        indoor_type=_normalize_model(_get_field(row, "coil_type")),
-        config=None,
+        indoor_type=coil_type,
+        config=coil_type,
+        coil_width=coil_width_from_model(coil),
+        furnace_width=None,
         cabinet_width=None,
         furnace_btu=None,
         blower_type=None,

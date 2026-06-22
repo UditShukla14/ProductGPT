@@ -9,6 +9,7 @@ GraphNodeType = Literal[
     "furnace",
     "category",
     "refrigerant",
+    "accessory",
 ]
 
 GraphEdgeType = Literal[
@@ -17,6 +18,7 @@ GraphEdgeType = Literal[
     "has_furnace",
     "in_category",
     "uses_refrigerant",
+    "has_accessory",
 ]
 
 

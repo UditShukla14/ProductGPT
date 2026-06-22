@@ -1,7 +1,6 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 
-import { CardCarousel } from "@/components/CardCarousel"
 import { SystemCard } from "@/components/SystemCard"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -21,6 +20,9 @@ interface BoughtTogetherMatchupsModalProps {
   item: BoughtTogetherItem | null
   equipmentCategory?: string
   refrigerantType?: string
+  flow?: string
+  coilWidth?: string
+  furnaceWidth?: string
   preferHigherSeer?: boolean
   onSelectMatchup: (recommendation: HvacRecommendation, rank: number) => void
 }
@@ -33,6 +35,9 @@ export function BoughtTogetherMatchupsModal({
   item,
   equipmentCategory,
   refrigerantType,
+  flow,
+  coilWidth,
+  furnaceWidth,
   preferHigherSeer = true,
   onSelectMatchup,
 }: BoughtTogetherMatchupsModalProps) {
@@ -45,6 +50,9 @@ export function BoughtTogetherMatchupsModal({
       item?.model,
       equipmentCategory,
       refrigerantType,
+      flow,
+      coilWidth,
+      furnaceWidth,
       preferHigherSeer,
     ],
     queryFn: ({ pageParam }) =>
@@ -55,6 +63,9 @@ export function BoughtTogetherMatchupsModal({
         paired_model: item!.model,
         equipment_category: equipmentCategory,
         refrigerant_type: refrigerantType,
+        flow,
+        coil_width: item?.type === "coil" ? coilWidth : undefined,
+        furnace_width: item?.type === "furnace" ? furnaceWidth : undefined,
         limit: PAGE_SIZE,
         offset: pageParam,
         prefer_higher_seer: preferHigherSeer,
@@ -90,9 +101,9 @@ export function BoughtTogetherMatchupsModal({
         )}
 
         {isInitialLoading && (
-          <div className="flex w-full min-w-0 gap-3 overflow-hidden">
-            {[1, 2].map((key) => (
-              <Skeleton key={key} className="h-[7.5rem] w-full shrink-0 rounded-xl" />
+          <div className="space-y-2">
+            {[1, 2, 3].map((key) => (
+              <Skeleton key={key} className="h-[7.5rem] w-full rounded-xl" />
             ))}
           </div>
         )}
@@ -107,7 +118,7 @@ export function BoughtTogetherMatchupsModal({
         )}
 
         {matchups.length > 0 && (
-          <CardCarousel ariaLabel="Paired component matchups">
+          <div className="max-h-[min(60vh,32rem)] space-y-2 overflow-y-auto pr-1">
             {matchups.map((recommendation, index) => (
               <SystemCard
                 key={recommendation.system.id}
@@ -116,7 +127,7 @@ export function BoughtTogetherMatchupsModal({
                 onClick={() => onSelectMatchup(recommendation, index + 1)}
               />
             ))}
-          </CardCarousel>
+          </div>
         )}
 
         {matchups.length > 0 && (

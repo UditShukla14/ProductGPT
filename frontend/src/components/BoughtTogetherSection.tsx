@@ -30,7 +30,7 @@ function BoughtTogetherGroupCard({
 }) {
   const config = COMPONENT_SECTION_CONFIG[type]
   const Icon = typeIcons[type]
-  const isClickable = (type === "coil" || type === "furnace") && onItemClick != null
+  const isClickable = onItemClick != null
 
   return (
     <Card className="h-full gap-0 py-0 shadow-none">

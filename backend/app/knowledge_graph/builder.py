@@ -7,6 +7,7 @@ import networkx as nx
 
 from app.models.hvac_system import HvacSystem
 from app.schemas.knowledge_graph import GraphEdgeType, GraphNodeType
+from app.services.accessories import parse_system_accessories
 
 EDGE_ATTR = "type"
 
@@ -16,6 +17,7 @@ REL_TYPE_MAP: dict[GraphEdgeType, str] = {
     "has_furnace": "HAS_FURNACE",
     "in_category": "IN_CATEGORY",
     "uses_refrigerant": "USES_REFRIGERANT",
+    "has_accessory": "HAS_ACCESSORY",
 }
 
 CYPHER_REL_TO_EDGE: dict[str, GraphEdgeType] = {v: k for k, v in REL_TYPE_MAP.items()}
@@ -50,6 +52,10 @@ def _category_id(category: str) -> str:
 
 def _refrigerant_id(refrigerant: str) -> str:
     return f"refrigerant:{refrigerant}"
+
+
+def _accessory_id(sku: str) -> str:
+    return f"accessory:{sku}"
 
 
 def _outdoor_model(system: HvacSystem) -> str | None:
@@ -164,6 +170,35 @@ def extract_graph_elements(
                 {"name": system.refrigerant_type},
             )
             add_edge(cert_node, refrigerant_node, "uses_refrigerant")
+
+        component_node_by_model: dict[str, str] = {}
+        if outdoor:
+            component_node_by_model[outdoor.upper()] = _component_id("outdoor", outdoor)
+        if coil:
+            component_node_by_model[coil.upper()] = _component_id("coil", coil)
+        if furnace:
+            component_node_by_model[furnace.upper()] = _component_id("furnace", furnace)
+
+        for accessory in parse_system_accessories(system):
+            sku = (accessory.get("sku") or "").strip()
+            if not sku:
+                continue
+            accessory_node = _accessory_id(sku)
+            add_node(
+                accessory_node,
+                sku,
+                "accessory",
+                {
+                    "sku": sku,
+                    "description": accessory.get("description"),
+                    "source_model": accessory.get("source_model"),
+                },
+            )
+            add_edge(cert_node, accessory_node, "has_accessory")
+            source_model = (accessory.get("source_model") or "").strip().upper()
+            source_component_node = component_node_by_model.get(source_model)
+            if source_component_node:
+                add_edge(source_component_node, accessory_node, "has_accessory")
 
     return list(nodes.values()), edges
 

@@ -9,9 +9,11 @@ from app.api.v1.router import api_router
 from app.config import settings
 from app.database import SessionLocal, init_db
 from app.ingestion.goodman_ratings import ingest_goodman_ratings
+from app.ingestion.r32_engineering import ingest_r32_engineering
 from app.ingestion.shopify_products import ingest_shopify_products
 from app.knowledge_graph.neo4j_client import neo4j_client
 from app.knowledge_graph.store import graph_store
+from app.models.engineering_product import EngineeringProduct
 from app.models.hvac_system import HvacSystem
 from app.models.shopify_product import ShopifyProduct
 
@@ -35,6 +37,12 @@ def seed_hvac_data_if_needed() -> None:
         if shopify_count == 0 and shopify_csv.exists():
             logger.info("Seeding Shopify product images from %s", shopify_csv)
             ingest_shopify_products(db, shopify_csv, replace=True)
+
+        engineering_count = db.query(EngineeringProduct).count()
+        engineering_xlsx = settings.default_r32_engineering_xlsx
+        if engineering_count == 0 and engineering_xlsx.exists():
+            logger.info("Seeding R-32 engineering accessories from %s", engineering_xlsx)
+            ingest_r32_engineering(db, engineering_xlsx, replace=True)
 
         logger.info("Rebuilding knowledge graph (%s systems in DB)", db.query(HvacSystem).count())
         graph_store.connect_neo4j()

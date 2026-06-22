@@ -15,8 +15,29 @@ from app.schemas.component_search import (
 from app.schemas.recommendations import HvacRecommendation
 from app.services.hvac_search import system_to_schema
 from app.services.scoring import normalize_recommendation_scores
+from app.services.width_resolution import normalize_width
 
 COMPONENT_TYPES = ("outdoor", "coil", "furnace")
+HEAT_PUMP_CATEGORIES = frozenset({"Heat Pump", "Package Heat Pump"})
+
+
+def _component_preference_order(equipment_category: str | None) -> tuple[str, ...]:
+    if equipment_category in HEAT_PUMP_CATEGORIES:
+        return ("coil", "outdoor", "furnace")
+    return COMPONENT_TYPES
+
+
+def _resolve_matched_type(type_counts: dict[str, int], equipment_category: str | None) -> str | None:
+    if not type_counts:
+        return None
+    preference = _component_preference_order(equipment_category)
+    return max(
+        type_counts,
+        key=lambda component_type: (
+            type_counts[component_type],
+            -preference.index(component_type),
+        ),
+    )
 
 
 def _outdoor_model(system: HvacSystem) -> str | None:
@@ -48,9 +69,11 @@ def _model_matches(query: str, model: str | None) -> bool:
     return query.lower() in model.lower()
 
 
-def _detect_matched_type(query: str, system: HvacSystem) -> str | None:
+def _detect_matched_type(
+    query: str, system: HvacSystem, equipment_category: str | None = None
+) -> str | None:
     models = _component_models(system)
-    for component_type in COMPONENT_TYPES:
+    for component_type in _component_preference_order(equipment_category):
         if _model_matches(query, models[component_type]):
             return component_type
     return None
@@ -71,11 +94,28 @@ def _filter_by_component(query: str, component_type: str):
     return HvacSystem.furnace_model_revision.ilike(term)
 
 
-def _apply_goodman_filters(query, equipment_category: str | None, refrigerant_type: str | None):
+def _apply_goodman_filters(
+    query,
+    equipment_category: str | None,
+    refrigerant_type: str | None,
+    flow: str | None = None,
+    coil_width: str | None = None,
+    furnace_width: str | None = None,
+):
     if equipment_category:
         query = query.filter(HvacSystem.equipment_category == equipment_category.strip())
     if refrigerant_type:
         query = query.filter(HvacSystem.refrigerant_type == refrigerant_type.strip())
+    if flow:
+        query = query.filter(func.lower(HvacSystem.indoor_type) == flow.strip().lower())
+    if coil_width:
+        normalized = normalize_width(coil_width)
+        if normalized:
+            query = query.filter(HvacSystem.coil_width == normalized)
+    if furnace_width:
+        normalized = normalize_width(furnace_width)
+        if normalized:
+            query = query.filter(HvacSystem.furnace_width == normalized)
     return query
 
 
@@ -85,7 +125,8 @@ def _build_matchup_reason(
     models = _component_models(system)
     parts: list[str] = []
     if matched_type and matched_model:
-        parts.append(f"includes your {matched_type} model {matched_model}")
+        label = "air handler" if matched_type == "coil" else matched_type
+        parts.append(f"includes your {label} model {matched_model}")
     for component_type in COMPONENT_TYPES:
         model = models[component_type]
         if model:
@@ -102,6 +143,7 @@ def _score_matchup(
     query: str,
     matched_type: str | None,
     prefer_higher_seer: bool,
+    equipment_category: str | None = None,
 ) -> float:
     score = 50.0
     models = _component_models(system)
@@ -114,6 +156,9 @@ def _score_matchup(
             score += 20
         else:
             score += 10
+
+        if equipment_category in HEAT_PUMP_CATEGORIES and matched_type == "coil":
+            score += 15
 
     if prefer_higher_seer and system.seer is not None:
         score += min(system.seer, 20)
@@ -181,7 +226,12 @@ def search_by_component(
         func.lower(HvacSystem.model_status) == "active"
     )
     base_query = _apply_goodman_filters(
-        base_query, request.equipment_category, request.refrigerant_type
+        base_query,
+        request.equipment_category,
+        request.refrigerant_type,
+        request.flow,
+        request.coil_width,
+        request.furnace_width,
     )
 
     if request.component_type == "auto":
@@ -208,11 +258,10 @@ def search_by_component(
     if request.component_type == "auto" and systems:
         type_counts: dict[str, int] = defaultdict(int)
         for system in systems:
-            detected = _detect_matched_type(query, system)
+            detected = _detect_matched_type(query, system, request.equipment_category)
             if detected:
                 type_counts[detected] += 1
-        if type_counts:
-            matched_type = max(type_counts, key=type_counts.get)
+        matched_type = _resolve_matched_type(type_counts, request.equipment_category)
 
     matched_model: str | None = None
     if matched_type and systems:
@@ -226,8 +275,25 @@ def search_by_component(
 
     ranked: list[HvacRecommendation] = []
     for system in systems:
-        reason = _build_matchup_reason(matched_type, matched_model, system)
-        score = _score_matchup(system, query, matched_type, request.prefer_higher_seer)
+        system_match_type = (
+            _detect_matched_type(query, system, request.equipment_category)
+            if request.component_type == "auto"
+            else matched_type
+        )
+        system_match_model = (
+            _component_models(system).get(system_match_type) if system_match_type else None
+        )
+        if system_match_model and not _model_matches(query, system_match_model):
+            system_match_model = None
+
+        reason = _build_matchup_reason(system_match_type, system_match_model, system)
+        score = _score_matchup(
+            system,
+            query,
+            system_match_type,
+            request.prefer_higher_seer,
+            request.equipment_category,
+        )
         ranked.append(
             HvacRecommendation(
                 system=system_to_schema(system, sku_images),
@@ -269,7 +335,12 @@ def search_paired_matchups(
         _filter_by_component(request.paired_model, request.paired_type),
     )
     base_query = _apply_goodman_filters(
-        base_query, request.equipment_category, request.refrigerant_type
+        base_query,
+        request.equipment_category,
+        request.refrigerant_type,
+        request.flow,
+        request.coil_width,
+        request.furnace_width,
     )
 
     systems = (
@@ -294,6 +365,7 @@ def search_paired_matchups(
             request.anchor_model,
             request.anchor_type,
             request.prefer_higher_seer,
+            request.equipment_category,
         )
         ranked.append(
             HvacRecommendation(

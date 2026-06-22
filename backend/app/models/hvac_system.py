@@ -32,6 +32,8 @@ class HvacSystem(Base):
     indoor_unit: Mapped[str | None] = mapped_column(String(64), nullable=True)
     indoor_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
     config: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True)
+    coil_width: Mapped[str | None] = mapped_column(String(16), index=True, nullable=True)
+    furnace_width: Mapped[str | None] = mapped_column(String(16), index=True, nullable=True)
     cabinet_width: Mapped[str | None] = mapped_column(String(32), nullable=True)
     furnace_btu: Mapped[str | None] = mapped_column(String(32), nullable=True)
     blower_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -40,6 +42,7 @@ class HvacSystem(Base):
     refrigerant_type: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
     search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    accessories_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
