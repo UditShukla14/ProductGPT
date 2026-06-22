@@ -27,7 +27,7 @@ export function SystemCard({ recommendation, rank, onClick }: SystemCardProps) {
         }
       }}
       className={cn(
-        "flex min-h-[7.5rem] w-full min-w-0 cursor-pointer overflow-hidden rounded-xl border bg-card text-card-foreground transition-colors",
+        "flex min-h-32 w-full min-w-0 cursor-pointer overflow-hidden rounded-xl border bg-card text-card-foreground transition-colors",
         "hover:border-primary/40 hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       )}
     >

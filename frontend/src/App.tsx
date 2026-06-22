@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useInfiniteQuery } from "@tanstack/react-query"
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Loader2, Search, Sparkles } from "lucide-react"
 
 import { AppHeader } from "@/components/AppHeader"
@@ -24,6 +24,7 @@ import type {
   ComponentType,
   HvacRecommendation,
   HvacRecommendationRequest,
+  HvacRecommendationResponse,
 } from "@/types/api"
 
 const PAGE_SIZE = 25
@@ -89,6 +90,7 @@ function SectionHeading({
 }
 
 export default function App() {
+  const queryClient = useQueryClient()
   const [form, setForm] = useState<SearchForm>(defaultForm)
   const [productForm, setProductForm] = useState<ProductSearchForm>(defaultProductForm)
   const [activeMode, setActiveMode] = useState<SearchMode | null>(null)
@@ -103,9 +105,12 @@ export default function App() {
     rank: number
   } | null>(null)
   const [pairedMatchupItem, setPairedMatchupItem] = useState<BoughtTogetherItem | null>(null)
+  const [criteriaExtra, setCriteriaExtra] = useState<HvacRecommendation[]>([])
+  const [criteriaLoadMoreMeta, setCriteriaLoadMoreMeta] =
+    useState<HvacRecommendationResponse["meta"] | null>(null)
+  const [isLoadingMoreCriteria, setIsLoadingMoreCriteria] = useState(false)
   const activeSearchRef = useRef<HvacRecommendationRequest | null>(null)
   const activeProductSearchRef = useRef<ComponentSearchRequest | null>(null)
-  const loadMoreRef = useRef<HTMLDivElement>(null)
   const productLoadMoreRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -125,19 +130,42 @@ export default function App() {
     return () => observer.disconnect()
   }, [])
 
-  const criteriaQuery = useInfiniteQuery({
-    queryKey: ["recommendations", searchKey],
-    queryFn: ({ pageParam }) =>
+  const criteriaQuery = useQuery({
+    queryKey: ["criteria-recommendations", searchKey],
+    queryFn: () =>
       fetchRecommendations({
         ...activeSearchRef.current!,
         limit: PAGE_SIZE,
-        offset: pageParam,
+        offset: 0,
       }),
-    initialPageParam: 0,
-    getNextPageParam: (lastPage) =>
-      lastPage.meta.has_more ? lastPage.meta.offset + lastPage.meta.returned : undefined,
     enabled: activeMode === "criteria" && activeSearch !== null,
   })
+
+  const {
+    data: criteriaFirstPage,
+    isFetching: isCriteriaFetching,
+    isError: isCriteriaError,
+    error: criteriaError,
+  } = criteriaQuery
+
+  async function loadMoreCriteria() {
+    const paginationMeta = criteriaLoadMoreMeta ?? criteriaFirstPage?.meta
+    if (isLoadingMoreCriteria || !paginationMeta?.has_more) return
+
+    setIsLoadingMoreCriteria(true)
+    try {
+      const offset = (criteriaFirstPage?.recommendations.length ?? 0) + criteriaExtra.length
+      const data = await fetchRecommendations({
+        ...activeSearchRef.current!,
+        limit: PAGE_SIZE,
+        offset,
+      })
+      setCriteriaExtra((current) => [...current, ...data.recommendations])
+      setCriteriaLoadMoreMeta(data.meta)
+    } finally {
+      setIsLoadingMoreCriteria(false)
+    }
+  }
 
   const productQuery = useInfiniteQuery({
     queryKey: ["component-search", productSearchKey],
@@ -154,16 +182,6 @@ export default function App() {
   })
 
   const {
-    data: criteriaData,
-    isFetching: isCriteriaFetching,
-    isError: isCriteriaError,
-    error: criteriaError,
-    fetchNextPage: fetchNextCriteriaPage,
-    hasNextPage: hasNextCriteriaPage,
-    isFetchingNextPage: isFetchingNextCriteriaPage,
-  } = criteriaQuery
-
-  const {
     data: productData,
     isFetching: isProductFetching,
     isError: isProductError,
@@ -172,27 +190,6 @@ export default function App() {
     hasNextPage: hasNextProductPage,
     isFetchingNextPage: isFetchingNextProductPage,
   } = productQuery
-
-  useEffect(() => {
-    const target = loadMoreRef.current
-    if (!target || !hasNextCriteriaPage || isFetchingNextCriteriaPage || isCriteriaFetching) return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) fetchNextCriteriaPage()
-      },
-      { rootMargin: "200px" }
-    )
-
-    observer.observe(target)
-    return () => observer.disconnect()
-  }, [
-    fetchNextCriteriaPage,
-    hasNextCriteriaPage,
-    isFetchingNextCriteriaPage,
-    isCriteriaFetching,
-    criteriaData,
-  ])
 
   useEffect(() => {
     const target = productLoadMoreRef.current
@@ -230,6 +227,10 @@ export default function App() {
     event.preventDefault()
     const payload = buildSearchPayload(form)
     activeSearchRef.current = payload
+    queryClient.removeQueries({ queryKey: ["recommendations"] })
+    setCriteriaExtra([])
+    setCriteriaLoadMoreMeta(null)
+    setIsLoadingMoreCriteria(false)
     setActiveSearch(payload)
     setActiveMode("criteria")
     setSearchKey((key) => key + 1)
@@ -256,10 +257,13 @@ export default function App() {
     setPairedMatchupItem(null)
   }
 
-  const recommendations: HvacRecommendation[] =
-    criteriaData?.pages.flatMap((page) => page.recommendations) ?? []
-  const criteriaMeta = criteriaData?.pages[criteriaData.pages.length - 1]?.meta
+  const recommendations: HvacRecommendation[] = [
+    ...(criteriaFirstPage?.recommendations ?? []),
+    ...criteriaExtra,
+  ]
+  const criteriaMeta = criteriaLoadMoreMeta ?? criteriaFirstPage?.meta
   const criteriaTotal = criteriaMeta?.total_ranked ?? 0
+  const hasNextCriteriaPage = criteriaMeta?.has_more ?? false
 
   const productFirstPage = productData?.pages[0]
   const productMatchups: HvacRecommendation[] =
@@ -281,7 +285,7 @@ export default function App() {
   const isInitialProductLoading = isProductMode && isProductFetching && productMatchups.length === 0
 
   return (
-    <div className="min-h-svh w-full max-w-[100vw] overflow-x-hidden bg-background">
+    <div className="min-h-svh w-full max-w-[100vw] overflow-x-clip bg-background">
       <AppHeader
         productModel={productForm.model}
         componentType={productForm.component_type}
@@ -297,9 +301,9 @@ export default function App() {
         onProductSubmit={handleProductSubmit}
       />
 
-      <main className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-6">
-        <div className="grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
-          <aside className="min-w-0 lg:sticky lg:top-[calc(var(--app-header-height,10rem)+0.75rem)] lg:self-start">
+      <main className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-6 lg:flex lg:h-[calc(100dvh-var(--app-header-height,10rem))] lg:flex-col lg:overflow-hidden lg:py-4">
+        <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
+          <aside className="min-w-0 shrink-0 lg:sticky lg:top-0 lg:self-start lg:overflow-y-auto lg:overscroll-y-contain">
             <Card className="gap-0 py-0 shadow-none">
               <CardHeader className="gap-1 px-4 py-3">
                 <CardTitle className="flex items-center gap-1.5 text-sm">
@@ -457,7 +461,7 @@ export default function App() {
             </Card>
           </aside>
 
-          <section className="min-w-0 space-y-4 overflow-hidden">
+          <section className="min-h-0 min-w-0 space-y-4 overflow-y-auto overscroll-y-contain lg:max-h-full lg:pr-1">
             {isCriteriaMode && (
               <>
                 <SectionHeading
@@ -480,9 +484,9 @@ export default function App() {
                 )}
 
                 {isInitialCriteriaLoading && (
-                  <div className="flex w-full min-w-0 gap-3 overflow-hidden">
-                    {[1, 2].map((item) => (
-                      <Skeleton key={item} className="h-[7.5rem] w-full shrink-0 rounded-xl" />
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((item) => (
+                      <Skeleton key={item} className="h-[7.5rem] w-full rounded-xl" />
                     ))}
                   </div>
                 )}
@@ -497,7 +501,7 @@ export default function App() {
                 )}
 
                 {recommendations.length > 0 && (
-                  <CardCarousel ariaLabel="Recommended systems">
+                  <div className="space-y-2">
                     {recommendations.map((recommendation, index) => (
                       <SystemCard
                         key={recommendation.system.id}
@@ -506,12 +510,12 @@ export default function App() {
                         onClick={() => setSelected({ recommendation, rank: index + 1 })}
                       />
                     ))}
-                  </CardCarousel>
+                  </div>
                 )}
 
                 {recommendations.length > 0 && (
-                  <div ref={loadMoreRef} className="flex justify-center py-2">
-                    {isFetchingNextCriteriaPage ? (
+                  <div className="flex justify-center py-2">
+                    {isLoadingMoreCriteria ? (
                       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Loader2 className="size-3.5 animate-spin" />
                         Loading…
@@ -522,7 +526,7 @@ export default function App() {
                         variant="outline"
                         size="sm"
                         className="h-7 text-xs"
-                        onClick={() => fetchNextCriteriaPage()}
+                        onClick={() => void loadMoreCriteria()}
                       >
                         Load {PAGE_SIZE} more
                       </Button>
