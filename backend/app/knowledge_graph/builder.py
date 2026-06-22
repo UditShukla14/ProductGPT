@@ -67,7 +67,11 @@ def _furnace_model(system: HvacSystem) -> str | None:
     return value or None
 
 
-def extract_graph_elements(systems: list[HvacSystem]) -> tuple[list[GraphElementNode], list[GraphElementEdge]]:
+def extract_graph_elements(
+    systems: list[HvacSystem],
+    model_images: dict[str, str] | None = None,
+) -> tuple[list[GraphElementNode], list[GraphElementEdge]]:
+    model_images = model_images or {}
     nodes: dict[str, GraphElementNode] = {}
     edges: list[GraphElementEdge] = []
     edge_keys: set[tuple[str, str, GraphEdgeType]] = set()
@@ -107,25 +111,38 @@ def extract_graph_elements(systems: list[HvacSystem]) -> tuple[list[GraphElement
             "description": system.description,
             "source_row_id": system.source_row_id,
             "system_id": system.id,
+            "image_url": system.image_url,
         }
         add_node(cert_node, ahri, "certification", cert_props)
 
         outdoor = _outdoor_model(system)
         if outdoor:
             outdoor_node = _component_id("outdoor", outdoor)
-            add_node(outdoor_node, outdoor, "outdoor", {"model": outdoor})
+            outdoor_props: dict[str, Any] = {"model": outdoor}
+            outdoor_image = model_images.get(outdoor.upper())
+            if outdoor_image:
+                outdoor_props["image_url"] = outdoor_image
+            add_node(outdoor_node, outdoor, "outdoor", outdoor_props)
             add_edge(cert_node, outdoor_node, "has_outdoor")
 
         coil = _coil_model(system)
         if coil:
             coil_node = _component_id("coil", coil)
-            add_node(coil_node, coil, "coil", {"model": coil})
+            coil_props: dict[str, Any] = {"model": coil}
+            coil_image = model_images.get(coil.upper())
+            if coil_image:
+                coil_props["image_url"] = coil_image
+            add_node(coil_node, coil, "coil", coil_props)
             add_edge(cert_node, coil_node, "has_coil")
 
         furnace = _furnace_model(system)
         if furnace:
             furnace_node = _component_id("furnace", furnace)
-            add_node(furnace_node, furnace, "furnace", {"model": furnace})
+            furnace_props: dict[str, Any] = {"model": furnace}
+            furnace_image = model_images.get(furnace.upper())
+            if furnace_image:
+                furnace_props["image_url"] = furnace_image
+            add_node(furnace_node, furnace, "furnace", furnace_props)
             add_edge(cert_node, furnace_node, "has_furnace")
 
         if system.equipment_category:
@@ -151,9 +168,12 @@ def extract_graph_elements(systems: list[HvacSystem]) -> tuple[list[GraphElement
     return list(nodes.values()), edges
 
 
-def build_graph_from_systems(systems: list[HvacSystem]) -> nx.Graph:
+def build_graph_from_systems(
+    systems: list[HvacSystem],
+    model_images: dict[str, str] | None = None,
+) -> nx.Graph:
     graph = nx.Graph()
-    nodes, edges = extract_graph_elements(systems)
+    nodes, edges = extract_graph_elements(systems, model_images=model_images)
 
     for node in nodes:
         graph.add_node(node.id, label=node.label, type=node.type, properties=node.properties)

@@ -1,6 +1,7 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { Loader2 } from "lucide-react"
 
+import { CardCarousel } from "@/components/CardCarousel"
 import { SystemCard } from "@/components/SystemCard"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
@@ -89,9 +90,9 @@ export function BoughtTogetherMatchupsModal({
         )}
 
         {isInitialLoading && (
-          <div className="space-y-3">
-            {[1, 2, 3].map((key) => (
-              <Skeleton key={key} className="h-24 w-full" />
+          <div className="flex w-full min-w-0 gap-3 overflow-hidden">
+            {[1, 2].map((key) => (
+              <Skeleton key={key} className="h-[7.5rem] w-full shrink-0 rounded-xl" />
             ))}
           </div>
         )}
@@ -105,16 +106,18 @@ export function BoughtTogetherMatchupsModal({
           </Alert>
         )}
 
-        <div className="space-y-3">
-          {matchups.map((recommendation, index) => (
-            <SystemCard
-              key={recommendation.system.id}
-              recommendation={recommendation}
-              rank={index + 1}
-              onClick={() => onSelectMatchup(recommendation, index + 1)}
-            />
-          ))}
-        </div>
+        {matchups.length > 0 && (
+          <CardCarousel ariaLabel="Paired component matchups">
+            {matchups.map((recommendation, index) => (
+              <SystemCard
+                key={recommendation.system.id}
+                recommendation={recommendation}
+                rank={index + 1}
+                onClick={() => onSelectMatchup(recommendation, index + 1)}
+              />
+            ))}
+          </CardCarousel>
+        )}
 
         {matchups.length > 0 && (
           <div className="flex items-center justify-between gap-4 border-t pt-4">

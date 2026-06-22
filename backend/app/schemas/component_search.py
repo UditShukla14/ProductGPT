@@ -26,6 +26,7 @@ class BoughtTogetherItem(BaseModel):
     matchup_count: int
     best_seer: float | None = None
     sample_system_id: int | None = None
+    image_url: str | None = None
 
 
 class ComponentSearchResponse(BaseModel):

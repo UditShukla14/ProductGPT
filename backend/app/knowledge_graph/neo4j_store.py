@@ -16,6 +16,8 @@ from app.knowledge_graph.builder import (
 )
 from app.knowledge_graph.neo4j_client import neo4j_client
 from app.models.hvac_system import HvacSystem
+from app.models.shopify_product import ShopifyProduct
+from app.services.product_images import build_sku_image_map
 from app.schemas.knowledge_graph import (
     GraphEdge,
     GraphExploreRequest,
@@ -68,8 +70,12 @@ class Neo4jGraphStore:
         with neo4j_client.session() as session:
             session.run("MATCH (n:GraphNode) DETACH DELETE n")
 
-    def sync_systems(self, systems: list[HvacSystem]) -> GraphStats:
-        nodes, edges = extract_graph_elements(systems)
+    def sync_systems(
+        self,
+        systems: list[HvacSystem],
+        model_images: dict[str, str] | None = None,
+    ) -> GraphStats:
+        nodes, edges = extract_graph_elements(systems, model_images=model_images)
         self.ensure_schema()
         self.clear()
         self._write_nodes(nodes)
@@ -78,7 +84,8 @@ class Neo4jGraphStore:
 
     def rebuild(self, db: Session) -> GraphStats:
         systems = db.query(HvacSystem).all()
-        return self.sync_systems(systems)
+        model_images = build_sku_image_map(db.query(ShopifyProduct).all())
+        return self.sync_systems(systems, model_images=model_images)
 
     def _write_nodes(self, nodes: list[GraphElementNode]) -> None:
         query = """

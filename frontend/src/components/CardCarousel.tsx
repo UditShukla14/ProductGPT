@@ -14,7 +14,7 @@ interface CardCarouselProps {
 export function CardCarousel({
   children,
   className,
-  slideClassName = "w-[min(100%,22rem)] sm:w-[26rem]",
+  slideClassName = "w-full shrink-0 basis-full snap-start",
   ariaLabel = "Card carousel",
 }: CardCarouselProps) {
   const trackRef = useRef<HTMLDivElement>(null)
@@ -49,9 +49,8 @@ export function CardCarousel({
     const track = trackRef.current
     if (!track) return
 
-    const distance = Math.max(track.clientWidth * 0.85, 280)
     track.scrollBy({
-      left: direction === "left" ? -distance : distance,
+      left: direction === "left" ? -track.clientWidth : track.clientWidth,
       behavior: "smooth",
     })
   }
@@ -59,7 +58,7 @@ export function CardCarousel({
   const slides = Array.isArray(children) ? children : [children]
 
   return (
-    <div className={cn("relative", className)}>
+    <div className={cn("relative w-full min-w-0 max-w-full overflow-hidden", className)}>
       {canScrollLeft && (
         <Button
           type="button"
@@ -67,9 +66,9 @@ export function CardCarousel({
           size="icon"
           aria-label="Scroll carousel left"
           onClick={() => scrollByDirection("left")}
-          className="absolute top-1/2 left-0 z-10 hidden -translate-x-1/2 -translate-y-1/2 rounded-full bg-background shadow-md sm:inline-flex"
+          className="absolute top-1/2 left-1 z-10 hidden size-8 -translate-y-1/2 rounded-full bg-background shadow-md sm:inline-flex"
         >
-          <ChevronLeft />
+          <ChevronLeft className="size-4" />
         </Button>
       )}
 
@@ -80,9 +79,9 @@ export function CardCarousel({
           size="icon"
           aria-label="Scroll carousel right"
           onClick={() => scrollByDirection("right")}
-          className="absolute top-1/2 right-0 z-10 hidden translate-x-1/2 -translate-y-1/2 rounded-full bg-background shadow-md sm:inline-flex"
+          className="absolute top-1/2 right-1 z-10 hidden size-8 -translate-y-1/2 rounded-full bg-background shadow-md sm:inline-flex"
         >
-          <ChevronRight />
+          <ChevronRight className="size-4" />
         </Button>
       )}
 
@@ -90,10 +89,10 @@ export function CardCarousel({
         ref={trackRef}
         role="region"
         aria-label={ariaLabel}
-        className="flex gap-4 overflow-x-auto overflow-y-visible overscroll-x-contain overscroll-y-auto scroll-smooth pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
+        className="flex w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain scroll-smooth pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
       >
         {slides.map((slide, index) => (
-          <div key={index} className={cn("shrink-0 snap-start", slideClassName)}>
+          <div key={index} className={cn("min-w-0", slideClassName)}>
             {slide}
           </div>
         ))}

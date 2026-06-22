@@ -19,6 +19,7 @@ from app.schemas.knowledge_graph import (
 )
 from app.services.component_search import search_by_component, search_paired_matchups
 from app.services.hvac_search import search_hvac_systems, system_to_schema
+from app.services.product_images import load_sku_image_map
 
 router = APIRouter(prefix="/hvac", tags=["hvac"])
 
@@ -79,4 +80,4 @@ def get_system(ahri_number: str, db: Session = Depends(get_db)) -> HvacSystemOut
     )
     if system is None:
         raise HTTPException(status_code=404, detail="HVAC system not found")
-    return system_to_schema(system)
+    return system_to_schema(system, load_sku_image_map(db))

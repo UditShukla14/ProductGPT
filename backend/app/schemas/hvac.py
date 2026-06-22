@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class HvacComponent(BaseModel):
     type: str
     model: str
+    image_url: str | None = None
 
 
 class HvacSystemOut(BaseModel):
@@ -29,6 +30,7 @@ class HvacSystemOut(BaseModel):
     model_status: str | None
     equipment_category: str | None = None
     refrigerant_type: str | None = None
+    image_url: str | None = None
     outdoor_model: str | None
     coil_model: str | None
     furnace_model: str | None

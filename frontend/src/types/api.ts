@@ -1,6 +1,7 @@
 export interface HvacComponent {
   type: string
   model: string
+  image_url?: string | null
 }
 
 export interface HvacSystem {
@@ -26,6 +27,7 @@ export interface HvacSystem {
   model_status: string | null
   equipment_category: string | null
   refrigerant_type: string | null
+  image_url: string | null
   outdoor_model: string | null
   coil_model: string | null
   furnace_model: string | null
@@ -93,6 +95,7 @@ export interface BoughtTogetherItem {
   matchup_count: number
   best_seer: number | null
   sample_system_id: number | null
+  image_url?: string | null
 }
 
 export interface ComponentSearchResponse {

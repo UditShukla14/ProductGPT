@@ -281,7 +281,7 @@ export default function App() {
   const isInitialProductLoading = isProductMode && isProductFetching && productMatchups.length === 0
 
   return (
-    <div className="min-h-svh bg-background">
+    <div className="min-h-svh w-full max-w-[100vw] overflow-x-hidden bg-background">
       <AppHeader
         productModel={productForm.model}
         componentType={productForm.component_type}
@@ -297,9 +297,9 @@ export default function App() {
         onProductSubmit={handleProductSubmit}
       />
 
-      <main className="mx-auto max-w-7xl px-4 py-4 sm:px-6">
-        <div className="grid gap-4 lg:grid-cols-[280px_1fr] lg:items-start">
-          <aside className="lg:sticky lg:top-[calc(var(--app-header-height,10rem)+0.75rem)] lg:self-start">
+      <main className="mx-auto w-full max-w-7xl min-w-0 px-4 py-4 sm:px-6">
+        <div className="grid min-w-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start">
+          <aside className="min-w-0 lg:sticky lg:top-[calc(var(--app-header-height,10rem)+0.75rem)] lg:self-start">
             <Card className="gap-0 py-0 shadow-none">
               <CardHeader className="gap-1 px-4 py-3">
                 <CardTitle className="flex items-center gap-1.5 text-sm">
@@ -457,7 +457,7 @@ export default function App() {
             </Card>
           </aside>
 
-          <section className="space-y-4">
+          <section className="min-w-0 space-y-4 overflow-hidden">
             {isCriteriaMode && (
               <>
                 <SectionHeading
@@ -480,9 +480,9 @@ export default function App() {
                 )}
 
                 {isInitialCriteriaLoading && (
-                  <div className="space-y-2">
-                    {[1, 2, 3].map((item) => (
-                      <Skeleton key={item} className="h-24 w-full rounded-lg" />
+                  <div className="flex w-full min-w-0 gap-3 overflow-hidden">
+                    {[1, 2].map((item) => (
+                      <Skeleton key={item} className="h-[7.5rem] w-full shrink-0 rounded-xl" />
                     ))}
                   </div>
                 )}
@@ -497,7 +497,7 @@ export default function App() {
                 )}
 
                 {recommendations.length > 0 && (
-                  <div className="space-y-2 overflow-visible">
+                  <CardCarousel ariaLabel="Recommended systems">
                     {recommendations.map((recommendation, index) => (
                       <SystemCard
                         key={recommendation.system.id}
@@ -506,7 +506,7 @@ export default function App() {
                         onClick={() => setSelected({ recommendation, rank: index + 1 })}
                       />
                     ))}
-                  </div>
+                  </CardCarousel>
                 )}
 
                 {recommendations.length > 0 && (
@@ -560,9 +560,9 @@ export default function App() {
                 )}
 
                 {isInitialProductLoading && (
-                  <div className="flex gap-3">
+                  <div className="flex w-full min-w-0 gap-3 overflow-hidden">
                     {[1, 2].map((item) => (
-                      <Skeleton key={item} className="h-28 w-64 shrink-0 rounded-lg" />
+                      <Skeleton key={item} className="h-[7.5rem] w-full shrink-0 rounded-xl" />
                     ))}
                   </div>
                 )}
@@ -588,12 +588,16 @@ export default function App() {
 
                 {!isInitialProductLoading && productMatchups.length > 0 && (
                   <>
-                    <SectionHeading title="Similar matchups" />
+                    <SectionHeading
+                      title="Similar matchups"
+                      count={
+                        productMeta
+                          ? `${productMatchups.length} / ${productTotal}`
+                          : undefined
+                      }
+                    />
 
-                    <CardCarousel
-                      ariaLabel="Similar matchups"
-                      slideClassName="w-[min(100%,18rem)] sm:w-[20rem]"
-                    >
+                    <CardCarousel ariaLabel="Similar matchups">
                       {productMatchups.map((recommendation, index) => (
                         <SystemCard
                           key={recommendation.system.id}

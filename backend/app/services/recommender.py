@@ -7,6 +7,7 @@ from app.schemas.recommendations import (
     HvacRecommendationResponse,
 )
 from app.services.hvac_search import _apply_filters, system_to_schema
+from app.services.product_images import load_sku_image_map
 from app.services.scoring import normalize_recommendation_scores
 from app.models.hvac_system import HvacSystem
 
@@ -77,13 +78,14 @@ def recommend_hvac_systems(
     query = db.query(HvacSystem)
     query = _apply_filters(query, search_params)
     candidates = query.all()
+    sku_images = load_sku_image_map(db)
 
     ranked: list[HvacRecommendation] = []
     for system in candidates:
         score, reason = _score_system(system, request)
         ranked.append(
             HvacRecommendation(
-                system=system_to_schema(system),
+                system=system_to_schema(system, sku_images),
                 score=round(score, 2),
                 reason=reason,
             )

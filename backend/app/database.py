@@ -33,6 +33,7 @@ def _migrate_hvac_columns() -> None:
     additions = {
         "equipment_category": "VARCHAR(64)",
         "refrigerant_type": "VARCHAR(32)",
+        "image_url": "TEXT",
     }
 
     with engine.begin() as conn:
@@ -55,7 +56,7 @@ def _migrate_hvac_columns() -> None:
 
 
 def init_db() -> None:
-    from app.models import hvac_system, knowledge_source  # noqa: F401
+    from app.models import hvac_system, knowledge_source, shopify_product  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_hvac_columns()

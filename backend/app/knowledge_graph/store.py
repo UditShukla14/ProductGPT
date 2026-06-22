@@ -11,10 +11,13 @@ from app.knowledge_graph.builder import (
     _cert_id,
     _component_id,
     build_graph_from_systems,
+    extract_graph_elements,
 )
 from app.knowledge_graph.neo4j_client import neo4j_client
 from app.knowledge_graph.neo4j_store import neo4j_graph_store
 from app.models.hvac_system import HvacSystem
+from app.models.shopify_product import ShopifyProduct
+from app.services.product_images import build_sku_image_map
 from app.schemas.knowledge_graph import (
     GraphEdge,
     GraphExploreRequest,
@@ -33,8 +36,10 @@ class NetworkxGraphStore:
     def is_ready(self) -> bool:
         return self._graph is not None
 
-    def rebuild_from_systems(self, systems: list[HvacSystem]) -> GraphStats:
-        self._graph = build_graph_from_systems(systems)
+    def rebuild_from_systems(
+        self, systems: list[HvacSystem], model_images: dict[str, str] | None = None
+    ) -> GraphStats:
+        self._graph = build_graph_from_systems(systems, model_images=model_images)
         return self.get_stats()
 
     def get_stats(self) -> GraphStats:
@@ -238,15 +243,16 @@ class KnowledgeGraphStore:
 
     def rebuild(self, db: Session) -> GraphStats:
         systems = db.query(HvacSystem).all()
-        networkx_stats = self._networkx.rebuild_from_systems(systems)
+        model_images = build_sku_image_map(db.query(ShopifyProduct).all())
+        networkx_stats = self._networkx.rebuild_from_systems(systems, model_images=model_images)
 
         if neo4j_client.enabled and neo4j_client.is_connected:
-            return neo4j_graph_store.sync_systems(systems)
+            return neo4j_graph_store.sync_systems(systems, model_images=model_images)
 
         if neo4j_client.enabled:
             connected = self.connect_neo4j()
             if connected:
-                return neo4j_graph_store.sync_systems(systems)
+                return neo4j_graph_store.sync_systems(systems, model_images=model_images)
 
         self._backend = "networkx"
         return networkx_stats

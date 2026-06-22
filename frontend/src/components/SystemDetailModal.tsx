@@ -1,6 +1,8 @@
 import type { HvacRecommendation, HvacSystem } from "@/types/api"
 import { Box, Flame, Snowflake } from "lucide-react"
 
+import { MatchupComponentImages } from "@/components/MatchupComponentImages"
+import { ProductImage } from "@/components/ProductImage"
 import { ScoreBadge } from "@/components/ScoreBadge"
 
 import { Badge } from "@/components/ui/badge"
@@ -75,6 +77,28 @@ export function SystemDetailModal({ recommendation, rank, open, onClose }: Syste
       />
 
       <DialogContent className="space-y-6">
+        {system.components.length > 0 ? (
+          <div className="overflow-hidden rounded-lg border bg-muted/20">
+            <MatchupComponentImages
+              components={system.components}
+              fallbackImage={system.image_url}
+              fallbackAlt={system.description ?? "HVAC product"}
+              spread
+            />
+          </div>
+        ) : (
+          system.image_url && (
+            <div className="overflow-hidden rounded-lg border bg-muted/20 p-4">
+              <ProductImage
+                src={system.image_url}
+                alt={system.description ?? "HVAC product"}
+                className="min-h-40"
+                imageClassName="mx-auto max-h-56"
+              />
+            </div>
+          )
+        )}
+
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">Rank #{rank}</Badge>
           <ScoreBadge score={score} />
@@ -91,13 +115,23 @@ export function SystemDetailModal({ recommendation, rank, open, onClose }: Syste
               {system.components.map((component) => (
                 <div
                   key={`${component.type}-${component.model}`}
-                  className="rounded-lg border bg-background px-4 py-3"
+                  className="overflow-hidden rounded-lg border bg-background"
                 >
-                  <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {componentIcon[component.type]}
-                    {component.type}
+                  <div className="border-b bg-muted/20 p-3">
+                    <ProductImage
+                      src={component.image_url}
+                      alt={component.model}
+                      className="min-h-24"
+                      imageClassName="mx-auto max-h-28 object-contain"
+                    />
                   </div>
-                  <p className="font-mono text-sm font-semibold">{component.model}</p>
+                  <div className="px-4 py-3">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                      {componentIcon[component.type]}
+                      {component.type}
+                    </div>
+                    <p className="font-mono text-sm font-semibold">{component.model}</p>
+                  </div>
                 </div>
               ))}
             </div>

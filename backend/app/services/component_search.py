@@ -4,6 +4,7 @@ from sqlalchemy import Float, cast, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.hvac_system import HvacSystem
+from app.services.product_images import load_sku_image_map, normalize_sku
 from app.schemas.component_search import (
     BoughtTogetherItem,
     ComponentSearchRequest,
@@ -126,7 +127,9 @@ def _score_matchup(
 def _build_bought_together(
     systems: list[HvacSystem],
     matched_type: str | None,
+    sku_images: dict[str, str] | None = None,
 ) -> list[BoughtTogetherItem]:
+    sku_images = sku_images or {}
     aggregates: dict[str, dict[str, dict]] = {
         component_type: defaultdict(
             lambda: {"count": 0, "best_seer": None, "sample_system_id": None}
@@ -154,6 +157,7 @@ def _build_bought_together(
         if component_type == matched_type:
             continue
         for model, stats in aggregates[component_type].items():
+            sku = normalize_sku(model)
             items.append(
                 BoughtTogetherItem(
                     type=component_type,
@@ -161,6 +165,7 @@ def _build_bought_together(
                     matchup_count=stats["count"],
                     best_seer=stats["best_seer"],
                     sample_system_id=stats["sample_system_id"],
+                    image_url=sku_images.get(sku) if sku else None,
                 )
             )
 
@@ -217,13 +222,15 @@ def search_by_component(
                 matched_model = model
                 break
 
+    sku_images = load_sku_image_map(db)
+
     ranked: list[HvacRecommendation] = []
     for system in systems:
         reason = _build_matchup_reason(matched_type, matched_model, system)
         score = _score_matchup(system, query, matched_type, request.prefer_higher_seer)
         ranked.append(
             HvacRecommendation(
-                system=system_to_schema(system),
+                system=system_to_schema(system, sku_images),
                 score=score,
                 reason=reason,
             )
@@ -232,7 +239,7 @@ def search_by_component(
     ranked.sort(key=lambda item: item.score, reverse=True)
     ranked = normalize_recommendation_scores(ranked)
     page = ranked[request.offset : request.offset + request.limit]
-    bought_together = _build_bought_together(systems, matched_type)
+    bought_together = _build_bought_together(systems, matched_type, sku_images=sku_images)
 
     meta = {
         "total_matchups": len(ranked),
@@ -273,6 +280,8 @@ def search_paired_matchups(
         .all()
     )
 
+    sku_images = load_sku_image_map(db)
+
     ranked: list[HvacRecommendation] = []
     for system in systems:
         reason = _build_matchup_reason(
@@ -288,7 +297,7 @@ def search_paired_matchups(
         )
         ranked.append(
             HvacRecommendation(
-                system=system_to_schema(system),
+                system=system_to_schema(system, sku_images),
                 score=score,
                 reason=reason,
             )

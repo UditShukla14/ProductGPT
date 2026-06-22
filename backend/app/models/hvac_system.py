@@ -39,6 +39,7 @@ class HvacSystem(Base):
     equipment_category: Mapped[str | None] = mapped_column(String(64), index=True, nullable=True)
     refrigerant_type: Mapped[str | None] = mapped_column(String(32), index=True, nullable=True)
     search_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(

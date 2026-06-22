@@ -5,19 +5,20 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.ingestion.goodman_ratings import SOURCE_TYPE
+from app.ingestion.goodman_ratings import SOURCE_TYPE as GOODMAN_SOURCE_TYPE
 from app.ingestion.registry import ingest_file
+from app.ingestion.shopify_products import SOURCE_TYPE as SHOPIFY_SOURCE_TYPE
 from app.schemas.common import IngestUploadResponse
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
-SUPPORTED_TYPES = {SOURCE_TYPE}
+SUPPORTED_TYPES = {GOODMAN_SOURCE_TYPE, SHOPIFY_SOURCE_TYPE}
 
 
 @router.post("/upload", response_model=IngestUploadResponse)
 async def upload_knowledge_file(
     file: UploadFile = File(...),
-    source_type: str = Form(default=SOURCE_TYPE),
+    source_type: str = Form(default=GOODMAN_SOURCE_TYPE),
     replace: bool = Form(default=True),
     db: Session = Depends(get_db),
 ) -> IngestUploadResponse:

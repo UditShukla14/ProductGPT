@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.hvac_system import HvacSystem
 from app.schemas.hvac import HvacComponent, HvacSearchRequest, HvacSystemOut
+from app.services.product_images import load_sku_image_map, resolve_image_for_model
 
 FIELD_LABELS: dict[str, str] = {
     "id": "Row ID",
@@ -76,16 +77,38 @@ def _parse_all_fields(raw_json: str | None) -> dict[str, str]:
     return fields
 
 
-def system_to_schema(system: HvacSystem) -> HvacSystemOut:
+def system_to_schema(
+    system: HvacSystem,
+    sku_images: dict[str, str] | None = None,
+) -> HvacSystemOut:
+    sku_images = sku_images or {}
     components: list[HvacComponent] = []
     outdoor = system.outdoor_model_revision or system.outdoor_model
     if outdoor:
-        components.append(HvacComponent(type="outdoor", model=outdoor))
+        components.append(
+            HvacComponent(
+                type="outdoor",
+                model=outdoor,
+                image_url=resolve_image_for_model(outdoor, sku_images),
+            )
+        )
     coil = system.coil_model_revision or system.coil_model_number
     if coil:
-        components.append(HvacComponent(type="coil", model=coil))
+        components.append(
+            HvacComponent(
+                type="coil",
+                model=coil,
+                image_url=resolve_image_for_model(coil, sku_images),
+            )
+        )
     if system.furnace_model_revision:
-        components.append(HvacComponent(type="furnace", model=system.furnace_model_revision))
+        components.append(
+            HvacComponent(
+                type="furnace",
+                model=system.furnace_model_revision,
+                image_url=resolve_image_for_model(system.furnace_model_revision, sku_images),
+            )
+        )
 
     return HvacSystemOut(
         id=system.id,
@@ -110,6 +133,7 @@ def system_to_schema(system: HvacSystem) -> HvacSystemOut:
         model_status=system.model_status,
         equipment_category=system.equipment_category,
         refrigerant_type=system.refrigerant_type,
+        image_url=system.image_url,
         outdoor_model=outdoor,
         coil_model=coil,
         furnace_model=system.furnace_model_revision,
@@ -187,10 +211,11 @@ def search_hvac_systems(db: Session, params: HvacSearchRequest) -> tuple[list[Hv
         .all()
     )
 
+    sku_images = load_sku_image_map(db)
     meta = {
         "total": total,
         "page": params.page,
         "limit": params.limit,
         "pages": (total + params.limit - 1) // params.limit if total else 0,
     }
-    return [system_to_schema(system) for system in systems], meta
+    return [system_to_schema(system, sku_images) for system in systems], meta

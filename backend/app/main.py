@@ -9,9 +9,11 @@ from app.api.v1.router import api_router
 from app.config import settings
 from app.database import SessionLocal, init_db
 from app.ingestion.goodman_ratings import ingest_goodman_ratings
+from app.ingestion.shopify_products import ingest_shopify_products
 from app.knowledge_graph.neo4j_client import neo4j_client
 from app.knowledge_graph.store import graph_store
 from app.models.hvac_system import HvacSystem
+from app.models.shopify_product import ShopifyProduct
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,13 @@ def seed_hvac_data_if_needed() -> None:
                 ingest_goodman_ratings(db, xlsx_path, replace=True)
             else:
                 logger.warning("No seed xlsx at %s — skipping ingest", xlsx_path)
+
+        shopify_count = db.query(ShopifyProduct).count()
+        shopify_csv = settings.default_shopify_products_csv
+        if shopify_count == 0 and shopify_csv.exists():
+            logger.info("Seeding Shopify product images from %s", shopify_csv)
+            ingest_shopify_products(db, shopify_csv, replace=True)
+
         logger.info("Rebuilding knowledge graph (%s systems in DB)", db.query(HvacSystem).count())
         graph_store.connect_neo4j()
         graph_store.rebuild(db)

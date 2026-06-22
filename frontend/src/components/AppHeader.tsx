@@ -54,9 +54,9 @@ export function AppHeader({
   return (
     <header
       id="app-header"
-      className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90"
+      className="sticky top-0 z-40 w-full max-w-[100vw] overflow-x-hidden border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/90"
     >
-      <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6">
+      <div className="mx-auto w-full max-w-7xl min-w-0 px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <h1 className="text-base font-semibold tracking-tight sm:text-lg">
