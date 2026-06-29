@@ -62,7 +62,7 @@ function BoughtTogetherGroupCard({
               <div className="flex shrink-0 items-center gap-1">
                 {item.best_seer != null && (
                   <Badge variant="outline" className="px-1 py-0 text-[10px]">
-                    {item.best_seer}
+                    SEER2 {item.best_seer}
                   </Badge>
                 )}
                 {isClickable && <ChevronRight className="size-3 text-primary" />}

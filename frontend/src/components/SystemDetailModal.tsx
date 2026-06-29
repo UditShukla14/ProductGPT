@@ -37,10 +37,10 @@ function buildSpecificationFields(system: HvacSystem): Array<[string, string]> {
   }
 
   const fallback: Array<[string, string | number | null | undefined]> = [
-    ["SEER", system.seer],
+    ["SEER2", system.seer],
     ["EER", system.eer],
     ["HSPF", system.hspf],
-    ["Cond SEER", system.cond_seer],
+    ["Cond SEER2", system.cond_seer],
     ["Tonnage", system.tonnage],
     ["Version", system.version],
     ["Equipment Category", system.equipment_category],
@@ -79,7 +79,7 @@ export function SystemDetailModal({ recommendation, rank, open, onClose }: Syste
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">Rank #{rank}</Badge>
           <ScoreBadge score={score} />
-          {system.seer != null && <Badge variant="outline">SEER {system.seer}</Badge>}
+          {system.seer != null && <Badge variant="outline">SEER2 {system.seer}</Badge>}
           {system.tonnage != null && <Badge variant="outline">{system.tonnage} Ton</Badge>}
           {system.stage && <Badge variant="outline">{system.stage}</Badge>}
           {system.model_status && <Badge variant="success">{system.model_status}</Badge>}

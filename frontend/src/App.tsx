@@ -338,7 +338,7 @@ export default function App() {
                   <Alert className="py-2">
                     <AlertTitle className="text-sm">No matches</AlertTitle>
                     <AlertDescription className="text-xs">
-                      Relax SEER, category, or refrigerant filters.
+                      Relax SEER2, category, or refrigerant filters.
                     </AlertDescription>
                   </Alert>
                 )}

@@ -132,7 +132,7 @@ def _build_matchup_reason(
         if model:
             parts.append(f"{component_type}: {model}")
     if system.seer is not None:
-        parts.append(f"SEER {system.seer}")
+        parts.append(f"SEER2 {system.seer}")
     if system.tonnage is not None:
         parts.append(f"{system.tonnage} ton")
     return "; ".join(parts)

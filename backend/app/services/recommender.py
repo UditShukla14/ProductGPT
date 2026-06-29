@@ -23,7 +23,7 @@ def _score_system(system: HvacSystem, request: HvacRecommendationRequest) -> tup
 
     if request.min_seer is not None and system.seer is not None and system.seer >= request.min_seer:
         score += 20
-        reasons.append(f"SEER {system.seer} >= {request.min_seer}")
+        reasons.append(f"SEER2 {system.seer} >= {request.min_seer}")
 
     if (
         request.equipment_category

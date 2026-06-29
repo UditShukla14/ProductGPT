@@ -80,4 +80,5 @@ def root():
         "docs": "/docs",
         "health": "/api/v1/health",
         "recommendations": "/api/v1/recommendations/hvac",
+        "public_product_lookup": "/api/v1/public/products/{product_id}",
     }

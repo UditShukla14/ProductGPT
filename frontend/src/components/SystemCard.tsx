@@ -45,7 +45,7 @@ export function SystemCard({ recommendation, rank, onClick }: SystemCardProps) {
             </Badge>
             {system.seer != null && (
               <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-                SEER {system.seer}
+                SEER2 {system.seer}
               </Badge>
             )}
             {system.tonnage != null && (

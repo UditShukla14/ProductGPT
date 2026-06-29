@@ -119,7 +119,7 @@ export function SearchSidebar({
 
               <div className="space-y-1">
                 <Label htmlFor="min_seer" className="text-[11px] text-muted-foreground">
-                  Min SEER
+                  Min SEER2
                 </Label>
                 <Input
                   id="min_seer"
@@ -137,7 +137,7 @@ export function SearchSidebar({
 
               <div className="space-y-1">
                 <Label htmlFor="max_seer" className="text-[11px] text-muted-foreground">
-                  Max SEER
+                  Max SEER2
                 </Label>
                 <Input
                   id="max_seer"
@@ -276,7 +276,7 @@ export function SearchSidebar({
 
             <div className="flex items-center justify-between rounded-md border px-2.5 py-1.5">
               <Label htmlFor="criteria_prefer_seer" className="text-xs">
-                Prefer higher SEER
+                Prefer higher SEER2
               </Label>
               <Switch
                 id="criteria_prefer_seer"
@@ -448,7 +448,7 @@ export function SearchSidebar({
 
             <div className="flex items-center justify-between rounded-md border px-2.5 py-1.5">
               <Label htmlFor="product_prefer_seer" className="text-xs">
-                Prefer higher SEER
+                Prefer higher SEER2
               </Label>
               <Switch
                 id="product_prefer_seer"
