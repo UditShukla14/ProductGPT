@@ -218,3 +218,9 @@ export interface ShopifySameCategoryByBrandResponse {
   current_vendor?: string | null
   brands: ShopifyCategoryBrandGroup[]
 }
+
+export interface ShopifySyncStatusResponse {
+  products: number
+  customers: number
+  orders: number
+}

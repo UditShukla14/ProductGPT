@@ -10,6 +10,7 @@ import type {
   ShopifyProductRecommendationsResponse,
   ShopifyProductSearchResponse,
   ShopifySameCategoryByBrandResponse,
+  ShopifySyncStatusResponse,
 } from "@/types/api"
 
 const API_BASE = "/api/v1"
@@ -90,4 +91,8 @@ export function fetchShopifySameCategory(productId: string, perBrandLimit = 8) {
   return request<ShopifySameCategoryByBrandResponse>(
     `/shopify/products/${encodeURIComponent(productId)}/same-category?${params}`
   )
+}
+
+export function fetchShopifySyncStatus() {
+  return request<ShopifySyncStatusResponse>("/shopify/sync/status")
 }

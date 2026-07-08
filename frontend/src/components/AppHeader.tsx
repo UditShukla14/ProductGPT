@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query"
-import { Activity, Database } from "lucide-react"
+import { Activity, Database, Package, ShoppingCart, Users } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { fetchHealth } from "@/lib/api"
+import { fetchHealth, fetchShopifySyncStatus } from "@/lib/api"
 
 const NAV_ITEMS = [
   { to: "/", label: "HVAC" },
@@ -17,6 +17,13 @@ export function AppHeader() {
     queryKey: ["health"],
     queryFn: fetchHealth,
     refetchInterval: 30_000,
+  })
+
+  const { data: shopifyStatus, isLoading: isShopifyStatusLoading } = useQuery({
+    queryKey: ["shopify-sync-status"],
+    queryFn: fetchShopifySyncStatus,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
   })
 
   const isShopify = location.pathname.startsWith("/shopify")
@@ -62,6 +69,29 @@ export function AppHeader() {
               )
             })}
           </nav>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isShopifyStatusLoading ? (
+              <Badge variant="secondary" className="text-xs">
+                Loading Shopify…
+              </Badge>
+            ) : shopifyStatus ? (
+              <>
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <Package className="size-3" />
+                  {shopifyStatus.products.toLocaleString()} products
+                </Badge>
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <ShoppingCart className="size-3" />
+                  {shopifyStatus.orders.toLocaleString()} orders
+                </Badge>
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <Users className="size-3" />
+                  {shopifyStatus.customers.toLocaleString()} customers
+                </Badge>
+              </>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
