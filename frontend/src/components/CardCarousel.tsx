@@ -89,10 +89,10 @@ export function CardCarousel({
         ref={trackRef}
         role="region"
         aria-label={ariaLabel}
-        className="flex w-full min-w-0 gap-3 overflow-x-auto overscroll-x-contain scroll-smooth pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
+        className="flex w-full min-w-0 items-stretch gap-3 overflow-x-auto overscroll-x-contain scroll-smooth px-0.5 pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory"
       >
         {slides.map((slide, index) => (
-          <div key={index} className={cn("min-w-0", slideClassName)}>
+          <div key={index} className={cn("flex min-h-0 min-w-0 self-stretch", slideClassName)}>
             {slide}
           </div>
         ))}

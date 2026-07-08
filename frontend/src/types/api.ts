@@ -223,4 +223,33 @@ export interface ShopifySyncStatusResponse {
   products: number
   customers: number
   orders: number
+  job: ShopifySyncJobStatus
+}
+
+export type ShopifySyncJobState = "idle" | "running" | "completed" | "failed"
+
+export interface ShopifySyncJobStatus {
+  state: ShopifySyncJobState
+  started_at?: string | null
+  finished_at?: string | null
+  current_resource?: string | null
+  phase?: string | null
+  error?: string | null
+  results?: ShopifySyncResourceResult[]
+  graph_rebuilt?: boolean
+}
+
+export interface ShopifySyncResourceResult {
+  resource: string
+  fetched: number
+  upserted: number
+  details_fetched?: number
+  total_in_db: number
+  status: string
+  error?: string | null
+}
+
+export interface ShopifySyncStartResponse {
+  message: string
+  job: ShopifySyncJobStatus
 }

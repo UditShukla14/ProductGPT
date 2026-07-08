@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Callable
 
 from app.config import settings
 from app.shopify.client import ResourceName, ShopifyApiClient
@@ -244,16 +245,20 @@ def sync_resources(
     *,
     enrich_details: bool | None = None,
     rebuild_graph: bool = True,
+    on_resource_start: Callable[[ResourceName], None] | None = None,
 ) -> list[ResourceSyncResult]:
     detail_resources = _detail_resources_to_enrich(enrich_details)
-    results = [
-        sync_resource(
-            client,
-            resource,
-            enrich_details=resource in detail_resources,
+    results: list[ResourceSyncResult] = []
+    for resource in resources:
+        if on_resource_start is not None:
+            on_resource_start(resource)
+        results.append(
+            sync_resource(
+                client,
+                resource,
+                enrich_details=resource in detail_resources,
+            )
         )
-        for resource in resources
-    ]
     if rebuild_graph and all(result.status == "completed" for result in results):
         shopify_graph_store.rebuild()
     return results

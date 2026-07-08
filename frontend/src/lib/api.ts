@@ -10,6 +10,7 @@ import type {
   ShopifyProductRecommendationsResponse,
   ShopifyProductSearchResponse,
   ShopifySameCategoryByBrandResponse,
+  ShopifySyncStartResponse,
   ShopifySyncStatusResponse,
 } from "@/types/api"
 
@@ -95,4 +96,31 @@ export function fetchShopifySameCategory(productId: string, perBrandLimit = 8) {
 
 export function fetchShopifySyncStatus() {
   return request<ShopifySyncStatusResponse>("/shopify/sync/status")
+}
+
+export async function startShopifySync(): Promise<ShopifySyncStartResponse> {
+  const response = await fetch(`${API_BASE}/shopify/sync/start`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  })
+
+  const text = await response.text()
+  let body: ShopifySyncStartResponse & { detail?: string; message?: string; job?: ShopifySyncStartResponse["job"] }
+  try {
+    body = text ? (JSON.parse(text) as typeof body) : ({} as typeof body)
+  } catch {
+    throw new Error(text || `Request failed with status ${response.status}`)
+  }
+
+  if (response.status === 409) {
+    throw new Error(body.message ?? body.detail ?? "A Shopify sync is already running")
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      typeof body.detail === "string" ? body.detail : `Request failed with status ${response.status}`
+    )
+  }
+
+  return body
 }

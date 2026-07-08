@@ -74,6 +74,30 @@ class ShopifySyncResponse(BaseModel):
     graph_stats: ShopifyGraphStats | None = None
 
 
+class ShopifySyncJobStatus(BaseModel):
+    state: Literal["idle", "running", "completed", "failed"]
+    started_at: str | None = None
+    finished_at: str | None = None
+    current_resource: str | None = None
+    phase: str | None = None
+    error: str | None = None
+    results: list[ShopifySyncResourceResult] = Field(default_factory=list)
+    graph_rebuilt: bool = False
+    graph_stats: ShopifyGraphStats | None = None
+
+
+class ShopifySyncStatusResponse(BaseModel):
+    products: int
+    customers: int
+    orders: int
+    job: ShopifySyncJobStatus
+
+
+class ShopifySyncStartResponse(BaseModel):
+    message: str
+    job: ShopifySyncJobStatus
+
+
 class ShopifyProductEnrichResponse(BaseModel):
     enriched: int
     failed: int = 0

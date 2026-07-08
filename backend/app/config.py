@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     neo4j_database: str = "neo4j"
     neo4j_enabled: bool = True
 
+    public_api_token: str = ""
+
     shopify_api_base_url: str = ""
     shopify_api_token: str = ""
     shopify_api_shop_domain: str = ""

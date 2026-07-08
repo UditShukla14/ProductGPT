@@ -3,6 +3,7 @@ import { Activity, Database, Package, ShoppingCart, Users } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
+import { ShopifySyncButton } from "@/components/ShopifySyncButton"
 import { cn } from "@/lib/utils"
 import { fetchHealth, fetchShopifySyncStatus } from "@/lib/api"
 
@@ -22,8 +23,9 @@ export function AppHeader() {
   const { data: shopifyStatus, isLoading: isShopifyStatusLoading } = useQuery({
     queryKey: ["shopify-sync-status"],
     queryFn: fetchShopifySyncStatus,
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    refetchInterval: (query) =>
+      query.state.data?.job.state === "running" ? 3_000 : 60_000,
+    staleTime: 5_000,
   })
 
   const isShopify = location.pathname.startsWith("/shopify")
@@ -89,6 +91,7 @@ export function AppHeader() {
                   <Users className="size-3" />
                   {shopifyStatus.customers.toLocaleString()} customers
                 </Badge>
+                <ShopifySyncButton />
               </>
             ) : null}
           </div>

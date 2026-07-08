@@ -3,13 +3,12 @@ import { useQuery } from "@tanstack/react-query"
 import { Loader2, Package, ShoppingBag } from "lucide-react"
 
 import { CardCarousel } from "@/components/CardCarousel"
-import { ProductImage } from "@/components/ProductImage"
 import { ShopifyProductCard } from "@/components/ShopifyProductCard"
+import { ShopifyProductDetail } from "@/components/ShopifyProductDetail"
 import { ShopifyProductSearch } from "@/components/ShopifyProductSearch"
 import { ShopifySameCategorySection } from "@/components/ShopifySameCategorySection"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   fetchShopifyBoughtTogether,
@@ -19,16 +18,20 @@ import type { ShopifyProductSummary } from "@/types/api"
 
 function ProductDetailSkeleton() {
   return (
-    <Card className="shadow-none">
-      <CardContent className="grid gap-4 p-4 sm:grid-cols-[200px_minmax(0,1fr)]">
-        <Skeleton className="aspect-square w-full rounded-lg" />
-        <div className="space-y-3">
-          <Skeleton className="h-7 w-3/4" />
-          <Skeleton className="h-4 w-1/2" />
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="grid lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+        <div className="border-b bg-muted/20 p-6 lg:border-b-0 lg:border-r">
+          <Skeleton className="mx-auto aspect-square w-full max-w-sm rounded-lg" />
+        </div>
+        <div className="space-y-4 p-6">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-8 w-3/4" />
+          <Skeleton className="h-7 w-28" />
+          <Skeleton className="h-32 w-full rounded-lg" />
           <Skeleton className="h-20 w-full" />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
 
@@ -36,7 +39,7 @@ function RecommendationsSkeleton() {
   return (
     <div className="flex gap-3 overflow-hidden">
       {Array.from({ length: 4 }).map((_, index) => (
-        <Skeleton key={index} className="h-56 w-44 shrink-0 rounded-xl" />
+        <Skeleton key={index} className="h-72 w-48 shrink-0 rounded-xl" />
       ))}
     </div>
   )
@@ -98,72 +101,7 @@ export function ShopifyPage() {
           </Alert>
         )}
 
-        {detail && (
-          <Card className="shadow-none">
-            <CardContent className="grid gap-6 p-4 sm:grid-cols-[220px_minmax(0,1fr)]">
-              <div className="overflow-hidden rounded-lg border bg-muted/20">
-                <ProductImage src={detail.image_url} alt={detail.title} />
-              </div>
-
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <h3 className="text-xl font-semibold leading-tight">{detail.title}</h3>
-                  <div className="flex flex-wrap gap-1.5">
-                    {detail.price && <Badge variant="secondary">${detail.price}</Badge>}
-                    {detail.sku && (
-                      <Badge variant="outline" className="font-mono">
-                        {detail.sku}
-                      </Badge>
-                    )}
-                    {detail.vendor && <Badge variant="outline">{detail.vendor}</Badge>}
-                    {detail.product_type && <Badge variant="outline">{detail.product_type}</Badge>}
-                    {detail.status && <Badge variant="outline">{detail.status}</Badge>}
-                  </div>
-                </div>
-
-                {detail.description && (
-                  <div
-                    className="prose prose-sm max-w-none text-muted-foreground [&_p]:my-2"
-                    dangerouslySetInnerHTML={{ __html: detail.description }}
-                  />
-                )}
-
-                {detail.tags && detail.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {detail.tags.map((tag) => (
-                      <Badge key={tag} variant="secondary" className="text-[10px]">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                {detail.variants && detail.variants.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Variants
-                    </p>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {detail.variants.slice(0, 6).map((variant) => (
-                        <div
-                          key={variant.id ?? variant.sku ?? variant.title}
-                          className="rounded-md border bg-muted/20 px-3 py-2 text-sm"
-                        >
-                          <p className="font-medium">{variant.title ?? "Default"}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {[variant.sku, variant.price ? `$${variant.price}` : null]
-                              .filter(Boolean)
-                              .join(" · ")}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {detail && <ShopifyProductDetail detail={detail} />}
 
         {selectedProduct && (
           <section className="space-y-3">
@@ -180,7 +118,7 @@ export function ShopifyPage() {
             {boughtTogetherQuery.isLoading ? (
               <RecommendationsSkeleton />
             ) : boughtTogetherQuery.data?.items.length ? (
-              <CardCarousel slideClassName="w-44 shrink-0 basis-44 snap-start" ariaLabel="People also bought">
+              <CardCarousel slideClassName="w-48 shrink-0 basis-48 snap-start" ariaLabel="People also bought">
                 {boughtTogetherQuery.data.items.map((item) => (
                   <ShopifyProductCard
                     key={item.product.id}

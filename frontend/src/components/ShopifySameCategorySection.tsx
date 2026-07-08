@@ -14,7 +14,7 @@ function RecommendationsSkeleton() {
   return (
     <div className="flex gap-3 overflow-hidden">
       {Array.from({ length: 4 }).map((_, index) => (
-        <Skeleton key={index} className="h-56 w-44 shrink-0 rounded-xl" />
+        <Skeleton key={index} className="h-72 w-48 shrink-0 rounded-xl" />
       ))}
     </div>
   )
@@ -101,7 +101,7 @@ export function ShopifySameCategorySection({
           {activeGroup && activeGroup.products.length > 0 ? (
             <CardCarousel
               key={activeGroup.vendor}
-              slideClassName="w-44 shrink-0 basis-44 snap-start"
+              slideClassName="w-48 shrink-0 basis-48 snap-start"
               ariaLabel={`${activeGroup.vendor} products in same category`}
             >
               {activeGroup.products.map((product) => (

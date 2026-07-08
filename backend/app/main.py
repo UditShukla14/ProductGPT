@@ -82,4 +82,5 @@ def root():
         "health": "/api/v1/health",
         "recommendations": "/api/v1/recommendations/hvac",
         "public_product_lookup": "/api/v1/public/products/{product_id}",
+        "public_shopify_recommendations": "/api/v1/public/shopify/products/{product_id}",
     }
