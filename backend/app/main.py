@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,53 +10,43 @@ from app.api.v1.router import api_router
 from app.config import settings
 from app.database import SessionLocal, init_db
 from app.ingestion.goodman_ratings import ingest_goodman_ratings
-from app.ingestion.r32_engineering import ingest_r32_engineering
 from app.knowledge_graph.neo4j_client import neo4j_client
 from app.knowledge_graph.store import graph_store
-from app.models.engineering_product import EngineeringProduct
 from app.models.hvac_system import HvacSystem
-from app.shopify.service import sync_shopify_if_needed
 
 logger = logging.getLogger(__name__)
 
 
-def seed_hvac_data_if_needed() -> None:
+def seed_matchup_data_if_needed() -> None:
+    """Seed Goodman matchup rows into productgpt.db and rebuild the HVAC graph when needed."""
     db = SessionLocal()
     try:
+        seeded = False
         count = db.query(HvacSystem).count()
         if count == 0:
             xlsx_path = settings.default_goodman_ratings_xlsx
             if xlsx_path.exists():
-                logger.info("Seeding HVAC data from %s", xlsx_path)
+                logger.info("Seeding HVAC matchup data from %s", xlsx_path)
                 ingest_goodman_ratings(db, xlsx_path, replace=True)
+                seeded = True
             else:
                 logger.warning("No seed xlsx at %s — skipping ingest", xlsx_path)
 
-        engineering_count = db.query(EngineeringProduct).count()
-        engineering_xlsx = settings.default_r32_engineering_xlsx
-        if engineering_count == 0 and engineering_xlsx.exists():
-            logger.info("Seeding R-32 engineering accessories from %s", engineering_xlsx)
-            ingest_r32_engineering(db, engineering_xlsx, replace=True)
-
-        logger.info("Rebuilding knowledge graph (%s systems in DB)", db.query(HvacSystem).count())
-        graph_store.connect_neo4j()
-        graph_store.rebuild(db)
-        logger.info("Knowledge graph ready (backend=%s)", graph_store.backend)
+        system_count = db.query(HvacSystem).count()
+        if seeded or (system_count > 0 and not graph_store.is_ready):
+            logger.info("Rebuilding HVAC knowledge graph (%s systems in DB)", system_count)
+            graph_store.connect_neo4j()
+            graph_store.rebuild(db)
+            logger.info("HVAC knowledge graph ready (backend=%s)", graph_store.backend)
     finally:
         db.close()
 
 
-def seed_shopify_data_if_needed() -> None:
+def _run_background_startup_tasks() -> None:
     try:
-        stats = sync_shopify_if_needed()
-        if stats is not None:
-            logger.info(
-                "Shopify knowledge graph ready: %s nodes, %s edges",
-                stats.node_count,
-                stats.edge_count,
-            )
+        seed_matchup_data_if_needed()
     except Exception:
-        logger.exception("Shopify sync failed during startup")
+        logger.exception("HVAC matchup startup tasks failed")
 
 
 @asynccontextmanager
@@ -63,8 +54,11 @@ async def lifespan(_: FastAPI):
     Path(settings.default_goodman_ratings_xlsx).parent.mkdir(parents=True, exist_ok=True)
     logger.info("Initializing database")
     init_db()
-    seed_hvac_data_if_needed()
-    seed_shopify_data_if_needed()
+    threading.Thread(
+        target=_run_background_startup_tasks,
+        name="hvac-startup",
+        daemon=True,
+    ).start()
     yield
     neo4j_client.close()
 

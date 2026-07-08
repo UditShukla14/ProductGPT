@@ -103,6 +103,49 @@ def run_full_shopify_sync(*, rebuild_graph: bool = True) -> list[ResourceSyncRes
     return results
 
 
+def run_full_shopify_pipeline(
+    *,
+    skip_already_enriched: bool = True,
+) -> tuple[list[ResourceSyncResult], list[ResourceEnrichResult], ShopifyGraphStats | None]:
+    """List-sync all resources, enrich all detail APIs, then rebuild the Shopify graph once."""
+    SHOPIFY_DATA_DIR.mkdir(parents=True, exist_ok=True)
+    logger.info(
+        "Starting full Shopify pipeline (list sync → enrich all → graph rebuild, page_limit=%s)",
+        settings.shopify_api_page_limit or "server default",
+    )
+
+    with build_shopify_client() as client:
+        sync_results = sync_resources(
+            client,
+            ALL_RESOURCES,
+            enrich_details=False,
+            rebuild_graph=False,
+        )
+
+    if any(result.status != "completed" for result in sync_results):
+        failed = [result.resource for result in sync_results if result.status != "completed"]
+        raise RuntimeError(f"Shopify list sync failed for: {', '.join(failed)}")
+
+    enrich_results: list[ResourceEnrichResult] = []
+    for resource in ALL_RESOURCES:
+        enrich_results.append(
+            run_resource_enrichment(
+                resource,
+                rebuild_graph=False,
+                skip_already_enriched=skip_already_enriched,
+            )
+        )
+
+    stats = shopify_graph_store.rebuild()
+    logger.info(
+        "Shopify pipeline complete: graph=%s nodes=%s edges=%s",
+        shopify_graph_store.backend,
+        stats.node_count,
+        stats.edge_count,
+    )
+    return sync_results, enrich_results, stats
+
+
 def run_resource_enrichment(
     resource: ResourceName,
     *,
@@ -207,26 +250,35 @@ def run_product_enrichment(
 
 
 def sync_shopify_if_needed() -> ShopifyGraphStats | None:
-    """Run a full sync when credentials exist and Shopify DBs are empty."""
+    """Rebuild the Shopify graph from existing DBs; never run a full API sync unless opted in."""
     if not is_shopify_configured():
         logger.debug("Shopify sync skipped — API credentials not configured")
         return None
 
-    if not shopify_data_is_empty() and not settings.shopify_sync_on_startup:
-        logger.info("Shopify data already present — skipping auto-sync")
-        if shopify_graph_store.is_ready:
-            return shopify_graph_store.get_stats()
-        logger.info("Rebuilding Shopify knowledge graph from existing DBs")
-        return shopify_graph_store.rebuild()
-
     if shopify_data_is_empty():
-        logger.info("Shopify DBs empty — running full sync")
-    else:
+        if settings.shopify_sync_on_startup:
+            logger.info("SHOPIFY_SYNC_ON_STARTUP enabled — running full sync")
+            results = run_full_shopify_sync(rebuild_graph=True)
+            if any(result.status != "completed" for result in results):
+                failed = [result.resource for result in results if result.status != "completed"]
+                raise RuntimeError(f"Shopify sync failed for: {', '.join(failed)}")
+            return shopify_graph_store.get_stats() if shopify_graph_store.is_ready else None
+
+        logger.info(
+            "Shopify DBs empty — skipping auto-sync on startup. "
+            "Run: python scripts/sync_shopify.py"
+        )
+        return None
+
+    if settings.shopify_sync_on_startup:
         logger.info("SHOPIFY_SYNC_ON_STARTUP enabled — running full sync")
+        results = run_full_shopify_sync(rebuild_graph=True)
+        if any(result.status != "completed" for result in results):
+            failed = [result.resource for result in results if result.status != "completed"]
+            raise RuntimeError(f"Shopify sync failed for: {', '.join(failed)}")
+        return shopify_graph_store.get_stats() if shopify_graph_store.is_ready else None
 
-    results = run_full_shopify_sync(rebuild_graph=True)
-    if any(result.status != "completed" for result in results):
-        failed = [result.resource for result in results if result.status != "completed"]
-        raise RuntimeError(f"Shopify sync failed for: {', '.join(failed)}")
-
-    return shopify_graph_store.get_stats() if shopify_graph_store.is_ready else None
+    logger.info("Shopify data already present — rebuilding graph from SQLite DBs")
+    if shopify_graph_store.is_ready:
+        return shopify_graph_store.get_stats()
+    return shopify_graph_store.rebuild()

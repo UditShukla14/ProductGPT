@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     shopify_api_base_url: str = ""
     shopify_api_token: str = ""
     shopify_api_shop_domain: str = ""
-    shopify_api_page_limit: int = 50  # 0 = omit limit param (API default is 20)
+    shopify_api_page_limit: int = 0  # 0 = omit ?limit= (Worxstream default 20; sending limit causes 502)
     shopify_api_requests_per_minute: int = 100
     shopify_api_timeout_seconds: float = 60.0
     shopify_data_dir: Path = PROJECT_ROOT / "data" / "shopify"

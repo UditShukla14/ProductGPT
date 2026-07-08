@@ -18,6 +18,22 @@ from app.shopify.service import (
     run_full_shopify_sync,
     run_product_enrichment,
 )
+from app.schemas.shopify_catalog import (
+    ShopifyProductDetail,
+    ShopifyProductRecommendationsResponse,
+    ShopifyProductRecommendation,
+    ShopifyProductSearchResponse,
+    ShopifyProductSummary,
+    ShopifySameCategoryByBrandResponse,
+    ShopifyCategoryBrandGroup,
+)
+from app.shopify.catalog import (
+    get_product_detail,
+    products_bought_together,
+    products_same_category_by_brand,
+    search_products,
+)
+
 from app.shopify.storage import count_records
 
 router = APIRouter(prefix="/shopify", tags=["shopify"])
@@ -37,6 +53,65 @@ def _missing_shopify_config() -> list[str]:
 @router.get("/sync/status")
 def sync_status() -> dict[str, int]:
     return {resource: count_records(resource) for resource in ALL_RESOURCES}
+
+
+@router.get("/products/search", response_model=ShopifyProductSearchResponse)
+def search_shopify_products(
+    q: str = Query(..., min_length=2, description="Product title, SKU, tag, or id"),
+    limit: int = Query(default=10, ge=1, le=25),
+) -> ShopifyProductSearchResponse:
+    if count_records("products") == 0:
+        raise HTTPException(
+            status_code=503,
+            detail="Shopify products database is empty. Run sync_shopify.py on the server first.",
+        )
+    results = search_products(q, limit=limit)
+    return ShopifyProductSearchResponse(
+        query=q,
+        results=[ShopifyProductSummary(**item) for item in results],
+    )
+
+
+@router.get("/products/{product_id}", response_model=ShopifyProductDetail)
+def get_shopify_product(product_id: str) -> ShopifyProductDetail:
+    detail = get_product_detail(product_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Product '{product_id}' not found")
+    return ShopifyProductDetail(**detail)
+
+
+@router.get("/products/{product_id}/bought-together", response_model=ShopifyProductRecommendationsResponse)
+def get_shopify_bought_together(
+    product_id: str,
+    limit: int = Query(default=8, ge=1, le=20),
+) -> ShopifyProductRecommendationsResponse:
+    if count_records("orders") == 0:
+        return ShopifyProductRecommendationsResponse(product_id=product_id, items=[])
+    items = products_bought_together(product_id, limit=limit)
+    return ShopifyProductRecommendationsResponse(
+        product_id=product_id,
+        items=[ShopifyProductRecommendation(**item) for item in items],
+    )
+
+
+@router.get("/products/{product_id}/same-category", response_model=ShopifySameCategoryByBrandResponse)
+def get_shopify_same_category(
+    product_id: str,
+    per_brand_limit: int = Query(default=8, ge=1, le=20),
+) -> ShopifySameCategoryByBrandResponse:
+    grouped = products_same_category_by_brand(product_id, per_brand_limit=per_brand_limit)
+    return ShopifySameCategoryByBrandResponse(
+        product_id=product_id,
+        category=grouped["category"],
+        current_vendor=grouped["current_vendor"],
+        brands=[
+            ShopifyCategoryBrandGroup(
+                vendor=brand["vendor"],
+                products=[ShopifyProductSummary(**product) for product in brand["products"]],
+            )
+            for brand in grouped["brands"]
+        ],
+    )
 
 
 @router.get("/health")

@@ -158,3 +158,63 @@ export interface PairedMatchupsResponse {
     has_more: boolean
   }
 }
+
+export interface ShopifyProductSummary {
+  id: string
+  title: string
+  vendor?: string | null
+  product_type?: string | null
+  sku?: string | null
+  price?: string | null
+  image_url?: string | null
+  status?: string | null
+  handle?: string | null
+}
+
+export interface ShopifyVariantSummary {
+  id?: string | null
+  sku?: string | null
+  title?: string | null
+  price?: string | null
+  inventory_quantity?: number | null
+  available_for_sale?: boolean | null
+}
+
+export interface ShopifyProductDetail extends ShopifyProductSummary {
+  shopify_gid?: string | null
+  description?: string | null
+  tags?: string[]
+  inventory_quantity?: number | null
+  available_for_sale?: boolean | null
+  variants?: ShopifyVariantSummary[]
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface ShopifyProductSearchResponse {
+  query: string
+  results: ShopifyProductSummary[]
+}
+
+export interface ShopifyProductRecommendation {
+  product: ShopifyProductSummary
+  order_count?: number | null
+  reason?: string | null
+}
+
+export interface ShopifyProductRecommendationsResponse {
+  product_id: string
+  items: ShopifyProductRecommendation[]
+}
+
+export interface ShopifyCategoryBrandGroup {
+  vendor: string
+  products: ShopifyProductSummary[]
+}
+
+export interface ShopifySameCategoryByBrandResponse {
+  product_id: string
+  category?: string | null
+  current_vendor?: string | null
+  brands: ShopifyCategoryBrandGroup[]
+}
