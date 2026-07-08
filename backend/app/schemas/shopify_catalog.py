@@ -59,3 +59,12 @@ class ShopifySameCategoryByBrandResponse(BaseModel):
     category: str | None = None
     current_vendor: str | None = None
     brands: list[ShopifyCategoryBrandGroup] = Field(default_factory=list)
+
+
+class ShopifyPublicProductResponse(BaseModel):
+    """Combined public response: product detail + people-also-bought + other-options."""
+
+    product_id: str
+    product: ShopifyProductDetail
+    bought_together: list[ShopifyProductRecommendation] = Field(default_factory=list)
+    other_options: ShopifySameCategoryByBrandResponse

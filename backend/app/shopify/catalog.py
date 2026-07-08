@@ -140,6 +140,7 @@ def get_product_detail(product_id: str) -> dict[str, Any] | None:
     return product_to_detail(product)
 
 
+
 def _line_item_product_id(line_item: dict[str, Any]) -> str | None:
     nested = line_item.get("product")
     if isinstance(nested, dict):
