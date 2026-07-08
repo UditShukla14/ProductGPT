@@ -1,16 +1,12 @@
-"""Resolve coil and furnace cabinet widths from model numbers and Shopify SKUs."""
+"""Resolve coil and furnace cabinet widths from model numbers."""
 
-import csv
 import re
-from pathlib import Path
 
 from sqlalchemy.orm import Session
 
 from app.models.hvac_system import HvacSystem
-from app.models.shopify_product import ShopifyProduct
 
 COIL_WIDTH_PATTERN = re.compile(r"(\d{2})(?=[A-Z]\d*$)")
-CABINET_WIDTH_COLUMN = "Cabinet Width (product.metafields.goodman.cabinet_width)"
 
 
 def normalize_width(value: str | None) -> str | None:
@@ -38,37 +34,6 @@ def coil_width_from_model(model: str | None) -> str | None:
     if 14 <= width <= 36:
         return str(width)
     return None
-
-
-def load_sku_cabinet_width_map(db: Session) -> dict[str, str]:
-    widths: dict[str, str] = {}
-    for product in db.query(ShopifyProduct).filter(ShopifyProduct.cabinet_width.isnot(None)).all():
-        normalized = normalize_width(product.cabinet_width)
-        if normalized:
-            widths[product.variant_sku.strip().upper()] = normalized
-
-    if widths:
-        return widths
-
-    return _load_cabinet_widths_from_csv()
-
-
-def _load_cabinet_widths_from_csv(file_path: Path | None = None) -> dict[str, str]:
-    from app.config import settings
-
-    path = file_path or settings.default_shopify_products_csv
-    if not path.exists():
-        return {}
-
-    widths: dict[str, str] = {}
-    with path.open(newline="", encoding="utf-8-sig") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            sku = (row.get("Variant SKU") or "").strip().upper()
-            cabinet_width = normalize_width(row.get(CABINET_WIDTH_COLUMN))
-            if sku and cabinet_width:
-                widths[sku] = cabinet_width
-    return widths
 
 
 def resolve_furnace_width(
@@ -100,10 +65,9 @@ def apply_widths_to_system(
 
 
 def apply_widths_to_systems(db: Session) -> int:
-    sku_widths = load_sku_cabinet_width_map(db)
     updated = 0
     for system in db.query(HvacSystem).all():
-        if apply_widths_to_system(system, sku_widths):
+        if apply_widths_to_system(system):
             updated += 1
     db.flush()
     return updated

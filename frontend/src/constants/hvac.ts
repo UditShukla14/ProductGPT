@@ -19,7 +19,7 @@ export const FLOW_OPTIONS = ["Horizontal", "Vertical"] as const
 /** Coil cabinet widths parsed from Goodman coil model numbers */
 export const COIL_WIDTH_OPTIONS = ["18", "22", "26", "30"] as const
 
-/** Furnace cabinet widths from Goodman Shopify cabinet_width metafield */
+/** Furnace cabinet widths used for HVAC search filters */
 export const FURNACE_WIDTH_OPTIONS = ["14", "17.5", "21", "24.5"] as const
 
 export function formatWidthInches(width: string): string {

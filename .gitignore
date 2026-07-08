@@ -3,6 +3,7 @@ __pycache__/
 .venv/
 .env
 data/*.db
+data/shopify/
 *.egg-info/
 .DS_Store
 node_modules/

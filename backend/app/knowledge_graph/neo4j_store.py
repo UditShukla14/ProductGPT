@@ -16,8 +16,7 @@ from app.knowledge_graph.builder import (
 )
 from app.knowledge_graph.neo4j_client import neo4j_client
 from app.models.hvac_system import HvacSystem
-from app.models.shopify_product import ShopifyProduct
-from app.services.product_images import build_sku_image_map
+from app.services.product_images import load_sku_image_map
 from app.schemas.knowledge_graph import (
     GraphEdge,
     GraphExploreRequest,
@@ -84,7 +83,7 @@ class Neo4jGraphStore:
 
     def rebuild(self, db: Session) -> GraphStats:
         systems = db.query(HvacSystem).all()
-        model_images = build_sku_image_map(db.query(ShopifyProduct).all())
+        model_images = load_sku_image_map(db)
         return self.sync_systems(systems, model_images=model_images)
 
     def _write_nodes(self, nodes: list[GraphElementNode]) -> None:

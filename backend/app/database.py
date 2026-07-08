@@ -57,15 +57,6 @@ def _migrate_hvac_columns() -> None:
                 )
             )
 
-    shopify_existing = (
-        {column["name"] for column in inspector.get_columns("shopify_products")}
-        if "shopify_products" in inspector.get_table_names()
-        else set()
-    )
-    if "shopify_products" in inspector.get_table_names() and "cabinet_width" not in shopify_existing:
-        with engine.begin() as conn:
-            conn.execute(text("ALTER TABLE shopify_products ADD COLUMN cabinet_width VARCHAR(32)"))
-
     from app.services.width_resolution import apply_widths_to_systems
 
     db = SessionLocal()
@@ -77,7 +68,7 @@ def _migrate_hvac_columns() -> None:
 
 
 def init_db() -> None:
-    from app.models import engineering_product, hvac_system, knowledge_source, shopify_product  # noqa: F401
+    from app.models import engineering_product, hvac_system, knowledge_source  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_hvac_columns()

@@ -3,7 +3,6 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.models.hvac_system import HvacSystem
-from app.models.shopify_product import ShopifyProduct
 
 
 def normalize_sku(value: str | None) -> str | None:
@@ -13,18 +12,8 @@ def normalize_sku(value: str | None) -> str | None:
     return text or None
 
 
-def build_sku_image_map(products: list[ShopifyProduct]) -> dict[str, str]:
-    mapping: dict[str, str] = {}
-    for product in products:
-        sku = normalize_sku(product.variant_sku)
-        image_url = (product.image_url or "").strip()
-        if sku and image_url and sku not in mapping:
-            mapping[sku] = image_url
-    return mapping
-
-
-def load_sku_image_map(db: Session) -> dict[str, str]:
-    return build_sku_image_map(db.query(ShopifyProduct).all())
+def load_sku_image_map(_db: Session) -> dict[str, str]:
+    return {}
 
 
 def resolve_image_for_model(model: str | None, sku_images: dict[str, str]) -> str | None:
@@ -45,6 +34,8 @@ def resolve_image_for_models(
 
 
 def resolve_image_for_system(system: HvacSystem, sku_images: dict[str, str]) -> str | None:
+    if system.image_url:
+        return system.image_url
     return resolve_image_for_models(
         [
             system.outdoor_model_revision or system.outdoor_model,
