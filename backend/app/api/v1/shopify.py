@@ -1,7 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.database import get_db
 from app.shopify import ALL_RESOURCES
 from app.shopify.graph.store import shopify_graph_store
 from app.shopify.graph.schemas import (
@@ -32,12 +34,15 @@ from app.schemas.shopify_catalog import (
     ShopifySameCategoryByBrandResponse,
     ShopifyCategoryBrandGroup,
 )
+from app.schemas.component_search import ComponentSearchResponse
 from app.shopify.catalog import (
     get_product_detail,
     products_bought_together,
     products_same_category_by_brand,
     search_products,
 )
+from app.shopify.hvac_matchups import shopify_product_hvac_matchups
+from app.shopify.hvac_matchups import shopify_product_hvac_matchups
 
 from app.shopify.storage import count_records
 
@@ -160,6 +165,26 @@ def get_shopify_bought_together(
     return ShopifyProductRecommendationsResponse(
         product_id=product_id,
         items=[ShopifyProductRecommendation(**item) for item in items],
+    )
+
+
+@router.get("/products/{product_id}/matchups", response_model=ComponentSearchResponse)
+def get_shopify_product_matchups(
+    product_id: str,
+    limit: int = Query(default=25, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    prefer_higher_seer: bool = True,
+    db: Session = Depends(get_db),
+) -> ComponentSearchResponse:
+    detail = get_product_detail(product_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail=f"Product '{product_id}' not found")
+    return shopify_product_hvac_matchups(
+        db,
+        product_id,
+        limit=limit,
+        offset=offset,
+        prefer_higher_seer=prefer_higher_seer,
     )
 
 

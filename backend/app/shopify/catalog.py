@@ -9,6 +9,7 @@ from typing import Any
 _BTU_RE = re.compile(r"(\d[\d,]*)\s*btu\b", re.I)
 _ZONE_COUNT_RE = re.compile(r"\b(\d+)\s*[- ]?zones?\b", re.I)
 _SINGLE_ZONE_RE = re.compile(r"\bsingle\s+zone\b", re.I)
+_MODEL_TOKEN_RE = re.compile(r"^[A-Z0-9][A-Z0-9._/-]{2,}$", re.I)
 
 from app.shopify.graph.builder import _primary_image_url, _variants
 from app.shopify.storage import load_all_records, load_record_by_id
@@ -260,7 +261,99 @@ def _matches_same_category_spec(source: dict[str, Any], candidate: dict[str, Any
     return True
 
 
-def _line_item_product_id(line_item: dict[str, Any]) -> str | None:
+def _build_product_lookup_indexes() -> tuple[dict[str, str], dict[str, str]]:
+    """Map variant SKU and variant id to parent product id from synced catalog."""
+    sku_to_product: dict[str, str] = {}
+    variant_to_product: dict[str, str] = {}
+    for product in load_all_records("products"):
+        product_id = _first_str(product, "id")
+        if not product_id:
+            continue
+        for variant in _variants(product):
+            sku = (_first_str(variant, "sku") or "").strip().lower()
+            if sku:
+                sku_to_product.setdefault(sku, product_id)
+            variant_id = _first_str(variant, "id")
+            if variant_id:
+                variant_to_product[variant_id] = product_id
+    return sku_to_product, variant_to_product
+
+
+def _sku_tokens(sku: str) -> list[str]:
+    return [token.strip().lower() for token in re.split(r"[,/\s]+", sku) if token.strip()]
+
+
+def _extract_model_codes(product: dict[str, Any]) -> set[str]:
+    codes: list[str] = []
+    for variant in _variants(product):
+        sku = _first_str(variant, "sku")
+        if not sku:
+            continue
+        for token in _sku_tokens(sku):
+            if len(token) >= 4 and _MODEL_TOKEN_RE.match(token):
+                codes.append(token)
+    for tag in _string_list(product.get("tags")):
+        token = tag.strip()
+        if len(token) >= 4 and _MODEL_TOKEN_RE.match(token):
+            codes.append(token.lower())
+    return set(codes)
+
+
+def _line_item_skus(line_item: dict[str, Any]) -> list[str]:
+    skus: list[str] = []
+    sku = _first_str(line_item, "sku")
+    if sku:
+        skus.append(sku)
+    variant = line_item.get("variant")
+    if isinstance(variant, dict):
+        variant_sku = _first_str(variant, "sku")
+        if variant_sku:
+            skus.append(variant_sku)
+    return skus
+
+
+def _sku_contains_model_code(sku: str, model_codes: set[str]) -> bool:
+    if not model_codes:
+        return False
+    return any(token in model_codes for token in _sku_tokens(sku))
+
+
+def _order_contains_target(
+    order: dict[str, Any],
+    target_id: str,
+    model_codes: set[str],
+    *,
+    sku_to_product: dict[str, str],
+    variant_to_product: dict[str, str],
+) -> bool:
+    product_ids = _product_ids_in_order(
+        order,
+        sku_to_product=sku_to_product,
+        variant_to_product=variant_to_product,
+    )
+    if target_id in product_ids:
+        return True
+    if not model_codes:
+        return False
+
+    line_items = order.get("line_items")
+    if not isinstance(line_items, list):
+        return False
+    for line_item in line_items:
+        if not isinstance(line_item, dict):
+            continue
+        for sku in _line_item_skus(line_item):
+            if _sku_contains_model_code(sku, model_codes):
+                return True
+    return False
+
+
+def _line_item_product_id(
+    line_item: dict[str, Any],
+    *,
+    sku_to_product: dict[str, str] | None = None,
+    variant_to_product: dict[str, str] | None = None,
+) -> str | None:
     nested = line_item.get("product")
     if isinstance(nested, dict):
         product_id = _first_str(nested, "id")
@@ -273,12 +366,34 @@ def _line_item_product_id(line_item: dict[str, Any]) -> str | None:
 
     variant = line_item.get("variant")
     if isinstance(variant, dict):
-        return _first_str(variant, "product_id")
+        product_id = _first_str(variant, "product_id")
+        if product_id:
+            return product_id
+        if variant_to_product is not None:
+            variant_id = _first_str(variant, "id")
+            if variant_id and variant_id in variant_to_product:
+                return variant_to_product[variant_id]
+            shopify_gid = _first_str(variant, "shopify_id")
+            if shopify_gid and shopify_gid.rsplit("/", 1)[-1] in variant_to_product:
+                return variant_to_product[shopify_gid.rsplit("/", 1)[-1]]
+
+    if sku_to_product is not None:
+        for sku_source in (line_item, variant if isinstance(variant, dict) else None):
+            if not isinstance(sku_source, dict):
+                continue
+            sku = (_first_str(sku_source, "sku") or "").strip().lower()
+            if sku and sku in sku_to_product:
+                return sku_to_product[sku]
 
     return None
 
 
-def _product_ids_in_order(order: dict[str, Any]) -> set[str]:
+def _product_ids_in_order(
+    order: dict[str, Any],
+    *,
+    sku_to_product: dict[str, str] | None = None,
+    variant_to_product: dict[str, str] | None = None,
+) -> set[str]:
     ids: set[str] = set()
     line_items = order.get("line_items")
     if not isinstance(line_items, list):
@@ -286,7 +401,11 @@ def _product_ids_in_order(order: dict[str, Any]) -> set[str]:
     for line_item in line_items:
         if not isinstance(line_item, dict):
             continue
-        product_id = _line_item_product_id(line_item)
+        product_id = _line_item_product_id(
+            line_item,
+            sku_to_product=sku_to_product,
+            variant_to_product=variant_to_product,
+        )
         if product_id:
             ids.add(product_id)
     return ids
@@ -294,12 +413,25 @@ def _product_ids_in_order(order: dict[str, Any]) -> set[str]:
 
 def products_bought_together(product_id: str, *, limit: int = 8) -> list[dict[str, Any]]:
     target_id = product_id.strip()
+    target_product = load_record_by_id("products", target_id)
+    model_codes = _extract_model_codes(target_product) if target_product else set()
     co_occurrence: Counter[str] = Counter()
+    sku_to_product, variant_to_product = _build_product_lookup_indexes()
 
     for order in load_all_records("orders"):
-        product_ids = _product_ids_in_order(order)
-        if target_id not in product_ids:
+        if not _order_contains_target(
+            order,
+            target_id,
+            model_codes,
+            sku_to_product=sku_to_product,
+            variant_to_product=variant_to_product,
+        ):
             continue
+        product_ids = _product_ids_in_order(
+            order,
+            sku_to_product=sku_to_product,
+            variant_to_product=variant_to_product,
+        )
         for other_id in product_ids:
             if other_id != target_id:
                 co_occurrence[other_id] += 1

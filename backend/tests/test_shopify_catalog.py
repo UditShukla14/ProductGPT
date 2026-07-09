@@ -113,6 +113,105 @@ def test_products_bought_together(catalog_data):
     assert items[1]["order_count"] == 1
 
 
+def test_products_bought_together_resolves_line_items_by_sku(catalog_data):
+    upsert_records(
+        "products",
+        [
+            {
+                "id": "900",
+                "title": "Trane Air Handler",
+                "vendor": "Trane",
+                "product_type": "Air Handler",
+                "variants": [{"id": "v900", "sku": "TWE060K3A", "price": "2532.50"}],
+            },
+            {
+                "id": "901",
+                "title": "Trane Thermostat",
+                "vendor": "Trane",
+                "product_type": "Thermostats",
+                "variants": [{"id": "v901", "sku": "TCONT824", "price": "199.00"}],
+            },
+        ],
+    )
+    upsert_records(
+        "orders",
+        [
+            {
+                "id": "order-sku-1",
+                "line_items": [
+                    {
+                        "sku": "TWE060K3A",
+                        "variant": {"id": "52533172666677", "sku": "TWE060K3A"},
+                    },
+                    {
+                        "sku": "TCONT824",
+                        "variant": {"id": "52533172666678", "sku": "TCONT824"},
+                    },
+                ],
+            },
+            {
+                "id": "order-sku-2",
+                "line_items": [
+                    {
+                        "sku": "TWE060K3A",
+                        "variant": {"id": "52533172666677", "sku": "TWE060K3A"},
+                    },
+                ],
+            },
+        ],
+    )
+
+    items = products_bought_together("900", limit=5)
+    assert [item["product"]["id"] for item in items] == ["901"]
+    assert items[0]["order_count"] == 1
+
+
+def test_products_bought_together_matches_bundle_skus_with_model_code(catalog_data):
+    upsert_records(
+        "products",
+        [
+            {
+                "id": "910",
+                "title": "Mitsubishi SUZ-AA12NL Outdoor Unit",
+                "vendor": "Mitsubishi",
+                "product_type": "Heat Pump Outdoor Unit",
+                "variants": [{"id": "v910", "sku": "SUZ-AA12NL", "price": "1299.00"}],
+            },
+            {
+                "id": "911",
+                "title": "Mitsubishi SUZ-AA12NL & MSZ-EX12NLW System",
+                "vendor": "Mitsubishi",
+                "product_type": "Wall Mounted Heat Pump System",
+                "variants": [{"id": "v911", "sku": "SUZ-AA12NL, MSZ-EX12NLW", "price": "2499.00"}],
+            },
+            {
+                "id": "912",
+                "title": "Lineset MLS143812T-30",
+                "vendor": "Mitsubishi",
+                "product_type": "Accessories",
+                "variants": [{"id": "v912", "sku": "MLS143812T-30", "price": "199.00"}],
+            },
+        ],
+    )
+    upsert_records(
+        "orders",
+        [
+            {
+                "id": "order-bundle-1",
+                "line_items": [
+                    {"sku": "SUZ-AA12NL, MSZ-EX12NLW"},
+                    {"sku": "MLS143812T-30"},
+                ],
+            },
+        ],
+    )
+
+    items = products_bought_together("910", limit=5)
+    assert [item["product"]["id"] for item in items] == ["912", "911"]
+    assert items[0]["order_count"] == 1
+    assert items[1]["order_count"] == 1
+
+
 def test_products_same_category(catalog_data):
     items = products_same_category("100", limit=5)
     assert {item["id"] for item in items} == {"300", "400"}

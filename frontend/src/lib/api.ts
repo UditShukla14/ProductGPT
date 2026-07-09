@@ -87,6 +87,20 @@ export function fetchShopifyBoughtTogether(productId: string, limit = 8) {
   )
 }
 
+export function fetchShopifyMatchups(
+  productId: string,
+  options: { limit?: number; offset?: number; prefer_higher_seer?: boolean } = {}
+) {
+  const params = new URLSearchParams({
+    limit: String(options.limit ?? 25),
+    offset: String(options.offset ?? 0),
+    prefer_higher_seer: String(options.prefer_higher_seer ?? true),
+  })
+  return request<ComponentSearchResponse>(
+    `/shopify/products/${encodeURIComponent(productId)}/matchups?${params}`
+  )
+}
+
 export function fetchShopifySameCategory(productId: string, perBrandLimit = 8) {
   const params = new URLSearchParams({ per_brand_limit: String(perBrandLimit) })
   return request<ShopifySameCategoryByBrandResponse>(

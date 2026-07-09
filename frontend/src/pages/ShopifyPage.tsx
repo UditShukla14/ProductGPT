@@ -4,6 +4,7 @@ import { Loader2, Package, ShoppingBag } from "lucide-react"
 
 import { CardCarousel } from "@/components/CardCarousel"
 import { ShopifyProductCard } from "@/components/ShopifyProductCard"
+import { ShopifyMatchupsSection } from "@/components/ShopifyMatchupsSection"
 import { ShopifyProductDetail } from "@/components/ShopifyProductDetail"
 import { ShopifyProductSearch } from "@/components/ShopifyProductSearch"
 import { ShopifySameCategorySection } from "@/components/ShopifySameCategorySection"
@@ -102,6 +103,8 @@ export function ShopifyPage() {
         )}
 
         {detail && <ShopifyProductDetail detail={detail} />}
+
+        {selectedProduct && <ShopifyMatchupsSection productId={selectedProduct.id} />}
 
         {selectedProduct && (
           <section className="space-y-3">
