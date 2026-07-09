@@ -95,6 +95,7 @@ def get_shopify_product_recommendations(
             product_id=product_id,
             category=grouped["category"],
             current_vendor=grouped["current_vendor"],
+            match_keywords=grouped["match_keywords"],
             brands=[
                 ShopifyCategoryBrandGroup(
                     vendor=brand["vendor"],

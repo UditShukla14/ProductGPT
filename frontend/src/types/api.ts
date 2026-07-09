@@ -216,6 +216,7 @@ export interface ShopifySameCategoryByBrandResponse {
   product_id: string
   category?: string | null
   current_vendor?: string | null
+  match_keywords?: string[]
   brands: ShopifyCategoryBrandGroup[]
 }
 

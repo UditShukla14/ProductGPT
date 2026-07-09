@@ -22,13 +22,11 @@ function RecommendationsSkeleton() {
 
 interface ShopifySameCategorySectionProps {
   productId: string
-  categoryLabel?: string | null
   onSelectProduct: (product: ShopifyProductSummary) => void
 }
 
 export function ShopifySameCategorySection({
   productId,
-  categoryLabel,
   onSelectProduct,
 }: ShopifySameCategorySectionProps) {
   const [activeBrand, setActiveBrand] = useState<string | null>(null)
@@ -46,16 +44,17 @@ export function ShopifySameCategorySection({
   }, [productId, sameCategoryQuery.data])
 
   const activeGroup = brands.find((brand) => brand.vendor === activeBrand) ?? brands[0]
+  const matchSubtitle = sameCategoryQuery.data?.match_keywords?.join(" · ")
 
   return (
     <section className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Layers className="size-4 text-muted-foreground" />
         <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-          Other options in the same category
+          Products related to this item
         </h3>
-        {categoryLabel && (
-          <span className="text-xs text-muted-foreground">({categoryLabel})</span>
+        {matchSubtitle && (
+          <span className="text-xs text-muted-foreground">({matchSubtitle})</span>
         )}
         {sameCategoryQuery.isFetching && (
           <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
@@ -68,7 +67,8 @@ export function ShopifySameCategorySection({
         <Card className="shadow-none">
           <CardHeader className="py-4">
             <CardTitle className="text-sm font-normal text-muted-foreground">
-              No other products found in this category from other brands.
+              No related products found from other brands
+              {matchSubtitle ? ` for ${matchSubtitle}` : ""}.
             </CardTitle>
           </CardHeader>
         </Card>
@@ -102,7 +102,7 @@ export function ShopifySameCategorySection({
             <CardCarousel
               key={activeGroup.vendor}
               slideClassName="w-48 shrink-0 basis-48 snap-start"
-              ariaLabel={`${activeGroup.vendor} products in same category`}
+              ariaLabel={`${activeGroup.vendor} related products`}
             >
               {activeGroup.products.map((product) => (
                 <ShopifyProductCard

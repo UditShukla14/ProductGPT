@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from typing import Any
+
+_BTU_RE = re.compile(r"(\d[\d,]*)\s*btu\b", re.I)
+_ZONE_COUNT_RE = re.compile(r"\b(\d+)\s*[- ]?zones?\b", re.I)
+_SINGLE_ZONE_RE = re.compile(r"\bsingle\s+zone\b", re.I)
 
 from app.shopify.graph.builder import _primary_image_url, _variants
 from app.shopify.storage import load_all_records, load_record_by_id
@@ -140,6 +145,120 @@ def get_product_detail(product_id: str) -> dict[str, Any] | None:
     return product_to_detail(product)
 
 
+def _product_search_text(product: dict[str, Any]) -> str:
+    parts: list[str] = []
+    for key in ("title", "product_type", "type", "description", "handle"):
+        value = _first_str(product, key)
+        if value:
+            parts.append(value)
+    parts.extend(_string_list(product.get("tags")))
+    for variant in _variants(product):
+        for key in ("sku", "title"):
+            value = _first_str(variant, key)
+            if value:
+                parts.append(value)
+    return " ".join(parts).lower()
+
+
+def _extract_btu_digits(product: dict[str, Any]) -> str | None:
+    for text in (
+        " ".join(_string_list(product.get("tags"))),
+        _first_str(product, "title") or "",
+    ):
+        match = _BTU_RE.search(text)
+        if match:
+            return match.group(1).replace(",", "")
+    return None
+
+
+def _extract_zone_match_terms(product: dict[str, Any]) -> list[str]:
+    terms: list[str] = []
+    blob = _product_search_text(product)
+
+    if _SINGLE_ZONE_RE.search(blob):
+        terms.extend(["single zone", "1 zone", "1-zone"])
+
+    for match in _ZONE_COUNT_RE.finditer(blob):
+        count = match.group(1)
+        terms.extend([f"{count} zone", f"{count}-zone", f"{count} zone rooms"])
+
+    product_type = (_first_str(product, "product_type", "type") or "").lower()
+    if "single zone" in product_type or "single-zone" in product_type:
+        terms.extend(["single zone", "1 zone", "1-zone"])
+
+    return list(dict.fromkeys(terms))
+
+
+def _text_contains_btu(text: str, btu_digits: str) -> bool:
+    normalized = text.replace(",", "").replace(" ", "")
+    if btu_digits in normalized:
+        return True
+    try:
+        formatted = f"{int(btu_digits):,}"
+    except ValueError:
+        return False
+    return formatted.lower() in text
+
+
+def _text_contains_zone_term(text: str, zone_terms: list[str]) -> bool:
+    return any(term in text for term in zone_terms)
+
+
+def _format_zone_display(product: dict[str, Any]) -> str | None:
+    blob = _product_search_text(product)
+    if _SINGLE_ZONE_RE.search(blob):
+        return "Single zone"
+    match = _ZONE_COUNT_RE.search(blob)
+    if match:
+        return f"{match.group(1)} zone"
+    product_type = (_first_str(product, "product_type", "type") or "").lower()
+    if "single zone" in product_type or "single-zone" in product_type:
+        return "Single zone"
+    if "multi-zone" in product_type or "multi zone" in product_type:
+        return "Multi-zone"
+    return None
+
+
+def _format_btu_display(btu_digits: str) -> str:
+    try:
+        return f"{int(btu_digits):,} BTU"
+    except ValueError:
+        return f"{btu_digits} BTU"
+
+
+def build_match_keywords(product: dict[str, Any]) -> list[str]:
+    keywords: list[str] = []
+    category = (_first_str(product, "product_type", "type") or "").strip()
+    if category:
+        keywords.append(f"Category: {category}")
+
+    btu = _extract_btu_digits(product)
+    if btu:
+        keywords.append(f"BTU: {_format_btu_display(btu)}")
+
+    zone = _format_zone_display(product)
+    if zone:
+        keywords.append(f"Zone: {zone}")
+
+    return keywords
+
+
+def _matches_same_category_spec(source: dict[str, Any], candidate: dict[str, Any]) -> bool:
+    category = (_first_str(source, "product_type", "type") or "").strip().lower()
+    candidate_type = (_first_str(candidate, "product_type", "type") or "").strip().lower()
+    if not category or candidate_type != category:
+        return False
+
+    candidate_text = _product_search_text(candidate)
+    btu = _extract_btu_digits(source)
+    zone_terms = _extract_zone_match_terms(source)
+
+    if btu and not _text_contains_btu(candidate_text, btu):
+        return False
+    if zone_terms and not _text_contains_zone_term(candidate_text, zone_terms):
+        return False
+    return True
+
 
 def _line_item_product_id(line_item: dict[str, Any]) -> str | None:
     nested = line_item.get("product")
@@ -209,14 +328,12 @@ def products_same_category(product_id: str, *, limit: int = 8) -> list[dict[str,
     if not category:
         return []
 
-    category_lower = category.lower()
     matches: list[dict[str, Any]] = []
     for candidate in load_all_records("products"):
         candidate_id = _first_str(candidate, "id")
         if not candidate_id or candidate_id == product_id:
             continue
-        candidate_type = (_first_str(candidate, "product_type", "type") or "").strip()
-        if candidate_type.lower() != category_lower:
+        if not _matches_same_category_spec(product, candidate):
             continue
         matches.append(product_to_summary(candidate))
         if len(matches) >= limit:
@@ -234,14 +351,19 @@ def products_same_category_by_brand(
     target_id = product_id.strip()
     product = load_record_by_id("products", target_id)
     if product is None:
-        return {"category": None, "current_vendor": None, "brands": []}
+        return {"category": None, "current_vendor": None, "match_keywords": [], "brands": []}
 
     category = (_first_str(product, "product_type", "type") or "").strip()
     current_vendor = (_first_str(product, "vendor") or "").strip()
+    match_keywords = build_match_keywords(product)
     if not category:
-        return {"category": None, "current_vendor": current_vendor or None, "brands": []}
+        return {
+            "category": None,
+            "current_vendor": current_vendor or None,
+            "match_keywords": match_keywords,
+            "brands": [],
+        }
 
-    category_lower = category.lower()
     current_vendor_lower = current_vendor.lower()
     by_vendor: dict[str, list[dict[str, Any]]] = {}
 
@@ -249,8 +371,7 @@ def products_same_category_by_brand(
         candidate_id = _first_str(candidate, "id")
         if not candidate_id or candidate_id == target_id:
             continue
-        candidate_type = (_first_str(candidate, "product_type", "type") or "").strip()
-        if candidate_type.lower() != category_lower:
+        if not _matches_same_category_spec(product, candidate):
             continue
 
         vendor = (_first_str(candidate, "vendor") or "Other").strip()
@@ -270,5 +391,6 @@ def products_same_category_by_brand(
     return {
         "category": category,
         "current_vendor": current_vendor or None,
+        "match_keywords": match_keywords,
         "brands": brands,
     }

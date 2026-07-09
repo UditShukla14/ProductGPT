@@ -58,6 +58,7 @@ class ShopifySameCategoryByBrandResponse(BaseModel):
     product_id: str
     category: str | None = None
     current_vendor: str | None = None
+    match_keywords: list[str] = Field(default_factory=list)
     brands: list[ShopifyCategoryBrandGroup] = Field(default_factory=list)
 
 

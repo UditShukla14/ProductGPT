@@ -108,7 +108,7 @@ export function ShopifyPage() {
             <div className="flex items-center gap-2">
               <Package className="size-4 text-muted-foreground" />
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                People also bought this
+                Customers also bought
               </h3>
               {boughtTogetherQuery.isFetching && (
                 <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
@@ -118,7 +118,7 @@ export function ShopifyPage() {
             {boughtTogetherQuery.isLoading ? (
               <RecommendationsSkeleton />
             ) : boughtTogetherQuery.data?.items.length ? (
-              <CardCarousel slideClassName="w-48 shrink-0 basis-48 snap-start" ariaLabel="People also bought">
+              <CardCarousel slideClassName="w-48 shrink-0 basis-48 snap-start" ariaLabel="Customers also bought">
                 {boughtTogetherQuery.data.items.map((item) => (
                   <ShopifyProductCard
                     key={item.product.id}
@@ -144,7 +144,6 @@ export function ShopifyPage() {
         {selectedProduct && (
           <ShopifySameCategorySection
             productId={selectedProduct.id}
-            categoryLabel={detail?.product_type}
             onSelectProduct={setSelectedProduct}
           />
         )}

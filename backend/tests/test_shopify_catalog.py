@@ -125,3 +125,54 @@ def test_products_same_category_by_brand(catalog_data):
     assert [brand["vendor"] for brand in grouped["brands"]] == ["Goodman", "Trane"]
     assert [product["id"] for product in grouped["brands"][0]["products"]] == ["400"]
     assert [product["id"] for product in grouped["brands"][1]["products"]] == ["300"]
+
+
+def test_products_same_category_by_brand_filters_btu_and_zone_keywords(catalog_data):
+    upsert_records(
+        "products",
+        [
+            {
+                "id": "500",
+                "title": "Mitsubishi 12,000 BTU Single Zone Mini Split",
+                "vendor": "Mitsubishi",
+                "product_type": "Mini Split Heat Pump System",
+                "tags": ["MSZ-JP12WA"],
+                "variants": [{"id": "v500", "sku": "MSZ-JP12WA", "price": "1999.00"}],
+            },
+            {
+                "id": "600",
+                "title": "MRCOOL 12,000 BTU Single Zone Mini Split",
+                "vendor": "MRCOOL",
+                "product_type": "Mini Split Heat Pump System",
+                "tags": ["DIY-12K"],
+                "variants": [{"id": "v600", "sku": "DIY-12K", "price": "1499.00"}],
+            },
+            {
+                "id": "700",
+                "title": "MRCOOL 18,000 BTU Single Zone Mini Split",
+                "vendor": "MRCOOL",
+                "product_type": "Mini Split Heat Pump System",
+                "tags": ["DIY-18K"],
+                "variants": [{"id": "v700", "sku": "DIY-18K", "price": "1699.00"}],
+            },
+            {
+                "id": "800",
+                "title": "MRCOOL 12,000 BTU 2 Zone Mini Split",
+                "vendor": "MRCOOL",
+                "product_type": "Mini Split Heat Pump System",
+                "tags": ["DIY-12K-2Z"],
+                "variants": [{"id": "v800", "sku": "DIY-12K-2Z", "price": "1799.00"}],
+            },
+        ],
+    )
+
+    grouped = products_same_category_by_brand("500", per_brand_limit=5)
+    assert grouped["category"] == "Mini Split Heat Pump System"
+    assert grouped["match_keywords"] == [
+        "Category: Mini Split Heat Pump System",
+        "BTU: 12,000 BTU",
+        "Zone: Single zone",
+    ]
+    assert grouped["current_vendor"] == "Mitsubishi"
+    assert [brand["vendor"] for brand in grouped["brands"]] == ["MRCOOL"]
+    assert [product["id"] for product in grouped["brands"][0]["products"]] == ["600"]
