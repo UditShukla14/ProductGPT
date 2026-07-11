@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.component_search import ComponentSearchResponse
+
 
 class ShopifyVariantSummary(BaseModel):
     id: str | None = None
@@ -63,9 +65,10 @@ class ShopifySameCategoryByBrandResponse(BaseModel):
 
 
 class ShopifyPublicProductResponse(BaseModel):
-    """Combined public response: product detail + people-also-bought + other-options."""
+    """Combined public response: product detail + people-also-bought + other-options + AHRI matchups."""
 
     product_id: str
     product: ShopifyProductDetail
     bought_together: list[ShopifyProductRecommendation] = Field(default_factory=list)
     other_options: ShopifySameCategoryByBrandResponse
+    matchups: ComponentSearchResponse

@@ -18,6 +18,7 @@ from app.shopify.catalog import (
     products_bought_together,
     products_same_category_by_brand,
 )
+from app.shopify.hvac_matchups import shopify_product_hvac_matchups
 from app.shopify.storage import count_records
 
 router = APIRouter(
@@ -62,12 +63,16 @@ def get_product_matchups(
 @router.get(
     "/shopify/products/{product_id}",
     response_model=ShopifyPublicProductResponse,
-    summary="People-also-bought & other-options for a Shopify product",
+    summary="People-also-bought, other-options & AHRI matchups for a Shopify product",
 )
 def get_shopify_product_recommendations(
     product_id: str,
     bought_together_limit: int = Query(default=8, ge=1, le=20),
     other_options_per_brand: int = Query(default=8, ge=1, le=20),
+    matchups_limit: int = Query(default=25, ge=1, le=100),
+    matchups_offset: int = Query(default=0, ge=0),
+    prefer_higher_seer: bool = Query(default=True),
+    db: Session = Depends(get_db),
 ) -> ShopifyPublicProductResponse:
     if count_records("products") == 0:
         raise HTTPException(
@@ -87,6 +92,14 @@ def get_shopify_product_recommendations(
 
     grouped = products_same_category_by_brand(product_id, per_brand_limit=other_options_per_brand)
 
+    matchups = shopify_product_hvac_matchups(
+        db,
+        product_id,
+        limit=matchups_limit,
+        offset=matchups_offset,
+        prefer_higher_seer=prefer_higher_seer,
+    )
+
     return ShopifyPublicProductResponse(
         product_id=product_id,
         product=ShopifyProductDetail(**detail),
@@ -104,4 +117,5 @@ def get_shopify_product_recommendations(
                 for brand in grouped["brands"]
             ],
         ),
+        matchups=matchups,
     )
