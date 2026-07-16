@@ -1,0 +1,8 @@
+{
+  "name": "productgpt",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "neo4j": "node scripts/open-neo4j.mjs"
+  }
+}

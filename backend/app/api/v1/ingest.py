@@ -6,13 +6,14 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.ingestion.goodman_ratings import SOURCE_TYPE as GOODMAN_SOURCE_TYPE
+from app.ingestion.od_sales import SOURCE_TYPE as OD_SALES_SOURCE_TYPE
 from app.ingestion.registry import ingest_file
 from app.ingestion.r32_engineering import SOURCE_TYPE as R32_ENGINEERING_SOURCE_TYPE
 from app.schemas.common import IngestUploadResponse
 
 router = APIRouter(prefix="/ingest", tags=["ingest"])
 
-SUPPORTED_TYPES = {GOODMAN_SOURCE_TYPE, R32_ENGINEERING_SOURCE_TYPE}
+SUPPORTED_TYPES = {GOODMAN_SOURCE_TYPE, R32_ENGINEERING_SOURCE_TYPE, OD_SALES_SOURCE_TYPE}
 
 
 @router.post("/upload", response_model=IngestUploadResponse)

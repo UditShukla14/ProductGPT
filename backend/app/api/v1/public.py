@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.auth import verify_public_api_token
 from app.database import get_db
+from app.schemas.chat import ChatMessageRequest
 from app.schemas.public_api import ComponentType, ProductLookupQuery, ProductLookupResponse
 from app.schemas.shopify_catalog import (
     ShopifyCategoryBrandGroup,
@@ -12,6 +14,7 @@ from app.schemas.shopify_catalog import (
     ShopifyPublicProductResponse,
     ShopifySameCategoryByBrandResponse,
 )
+from app.services.chat.stream import stream_chat_messages
 from app.services.product_lookup import lookup_product
 from app.shopify.catalog import (
     get_product_detail,
@@ -119,3 +122,19 @@ def get_shopify_product_recommendations(
         ),
         matchups=matchups,
     )
+
+
+@router.post(
+    "/chat/messages",
+    summary="Product-scoped Claude chat (SSE)",
+    response_class=StreamingResponse,
+)
+def post_public_chat_message(
+    payload: ChatMessageRequest, db: Session = Depends(get_db)
+) -> StreamingResponse:
+    """Bearer-authenticated product chat. Same behavior as internal `/chat/messages`.
+
+    Requires `product_id`. Streams SSE events: `token`, `retrieval`, `done`, `error`.
+    Never answers pricing questions.
+    """
+    return stream_chat_messages(db, payload)

@@ -9,14 +9,18 @@ interface ShopifyProductCardProps {
   subtitle?: string | null
   onClick?: (product: ShopifyProductSummary) => void
   className?: string
+  /** Hide price badges (required for chat citations). */
+  hidePrice?: boolean
 }
 
 function CardBody({
   product,
   subtitle,
+  hidePrice = false,
 }: {
   product: ShopifyProductSummary
   subtitle?: string | null
+  hidePrice?: boolean
 }) {
   return (
     <>
@@ -32,7 +36,7 @@ function CardBody({
         <p className="line-clamp-2 min-h-10 text-sm font-medium leading-5">{product.title}</p>
 
         <div className="flex min-h-5 flex-wrap items-center gap-1">
-          {product.price && (
+          {!hidePrice && product.price && (
             <Badge variant="secondary" className="shrink-0 text-[10px]">
               ${product.price}
             </Badge>
@@ -57,6 +61,7 @@ export function ShopifyProductCard({
   subtitle,
   onClick,
   className,
+  hidePrice = false,
 }: ShopifyProductCardProps) {
   const isClickable = onClick != null
 
@@ -64,7 +69,7 @@ export function ShopifyProductCard({
     return (
       <Card className={cn("flex h-full flex-col gap-0 py-0 shadow-none", className)}>
         <CardContent className="flex h-full flex-col p-0">
-          <CardBody product={product} subtitle={subtitle} />
+          <CardBody product={product} subtitle={subtitle} hidePrice={hidePrice} />
         </CardContent>
       </Card>
     )
@@ -79,7 +84,7 @@ export function ShopifyProductCard({
         className
       )}
     >
-      <CardBody product={product} subtitle={subtitle} />
+      <CardBody product={product} subtitle={subtitle} hidePrice={hidePrice} />
     </button>
   )
 }

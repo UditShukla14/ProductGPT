@@ -68,7 +68,7 @@ def _migrate_hvac_columns() -> None:
 
 
 def init_db() -> None:
-    from app.models import engineering_product, hvac_system, knowledge_source  # noqa: F401
+    from app.models import engineering_product, hvac_system, knowledge_source, sales_line_item  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _migrate_hvac_columns()

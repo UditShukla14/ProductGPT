@@ -81,9 +81,18 @@ class ShopifySyncJobStatus(BaseModel):
     current_resource: str | None = None
     phase: str | None = None
     error: str | None = None
+    requested_resources: list[str] = Field(default_factory=list)
     results: list[ShopifySyncResourceResult] = Field(default_factory=list)
     graph_rebuilt: bool = False
     graph_stats: ShopifyGraphStats | None = None
+
+
+class ShopifySyncStartRequest(BaseModel):
+    resources: list[Literal["products", "customers", "orders"]] | None = Field(
+        default=None,
+        description="Resources to sync. Omit or empty = all (products, customers, orders).",
+    )
+    rebuild_graph: bool = True
 
 
 class ShopifySyncStatusResponse(BaseModel):

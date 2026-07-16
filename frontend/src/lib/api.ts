@@ -1,6 +1,9 @@
 import type {
   ComponentSearchRequest,
   ComponentSearchResponse,
+  ChatHistoryMessage,
+  ChatRetrievalEvent,
+  ChatSseHandler,
   HealthResponse,
   HvacRecommendationRequest,
   HvacRecommendationResponse,
@@ -10,6 +13,7 @@ import type {
   ShopifyProductRecommendationsResponse,
   ShopifyProductSearchResponse,
   ShopifySameCategoryByBrandResponse,
+  ShopifySyncStartRequest,
   ShopifySyncStartResponse,
   ShopifySyncStatusResponse,
 } from "@/types/api"
@@ -112,14 +116,24 @@ export function fetchShopifySyncStatus() {
   return request<ShopifySyncStatusResponse>("/shopify/sync/status")
 }
 
-export async function startShopifySync(): Promise<ShopifySyncStartResponse> {
+export async function startShopifySync(
+  payload: ShopifySyncStartRequest = {}
+): Promise<ShopifySyncStartResponse> {
   const response = await fetch(`${API_BASE}/shopify/sync/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      resources: payload.resources,
+      rebuild_graph: payload.rebuild_graph ?? true,
+    }),
   })
 
   const text = await response.text()
-  let body: ShopifySyncStartResponse & { detail?: string; message?: string; job?: ShopifySyncStartResponse["job"] }
+  let body: ShopifySyncStartResponse & {
+    detail?: string
+    message?: string
+    job?: ShopifySyncStartResponse["job"]
+  }
   try {
     body = text ? (JSON.parse(text) as typeof body) : ({} as typeof body)
   } catch {
@@ -137,4 +151,103 @@ export async function startShopifySync(): Promise<ShopifySyncStartResponse> {
   }
 
   return body
+}
+
+function parseSseChunk(
+  buffer: string,
+  onEvent: (event: string, data: string) => void
+): string {
+  const parts = buffer.split("\n\n")
+  const rest = parts.pop() ?? ""
+  for (const part of parts) {
+    if (!part.trim()) continue
+    let eventName = "message"
+    const dataLines: string[] = []
+    for (const line of part.split("\n")) {
+      if (line.startsWith("event:")) {
+        eventName = line.slice(6).trim()
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice(5).trim())
+      }
+    }
+    if (dataLines.length) {
+      onEvent(eventName, dataLines.join("\n"))
+    }
+  }
+  return rest
+}
+
+export async function streamChatMessage(
+  payload: { message: string; productId: string; history?: ChatHistoryMessage[] },
+  handlers: ChatSseHandler,
+  signal?: AbortSignal
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/chat/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: payload.message,
+      product_id: payload.productId,
+      history: payload.history ?? [],
+    }),
+    signal,
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    let message = `Request failed with status ${response.status}`
+    if (text) {
+      try {
+        const body = JSON.parse(text) as { detail?: unknown }
+        if (body?.detail) {
+          message = typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail)
+        } else {
+          message = text
+        }
+      } catch {
+        message = text
+      }
+    }
+    throw new Error(message)
+  }
+
+  if (!response.body) {
+    throw new Error("Chat response had no body")
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+
+  const handleEvent = (event: string, data: string) => {
+    let parsed: Record<string, unknown> = {}
+    try {
+      parsed = JSON.parse(data) as Record<string, unknown>
+    } catch {
+      return
+    }
+
+    if (event === "token" && typeof parsed.text === "string") {
+      handlers.onToken?.(parsed.text)
+    } else if (event === "retrieval") {
+      handlers.onRetrieval?.(parsed as unknown as ChatRetrievalEvent)
+    } else if (event === "error" && typeof parsed.message === "string") {
+      handlers.onError?.(parsed.message)
+    } else if (event === "done") {
+      handlers.onDone?.({
+        ok: Boolean(parsed.ok),
+        refused: typeof parsed.refused === "string" ? parsed.refused : undefined,
+      })
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    buffer = parseSseChunk(buffer, handleEvent)
+  }
+  if (buffer.trim()) {
+    parseSseChunk(buffer + "\n\n", handleEvent)
+  }
 }

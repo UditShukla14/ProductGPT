@@ -25,6 +25,7 @@ class Settings(BaseSettings):
         PROJECT_ROOT / "data" / "Goodman November Ratings_cleaned.xlsx"
     )
     default_r32_engineering_xlsx: Path = PROJECT_ROOT / "data" / "R32_Engineering_file.xlsx"
+    default_od_sales_xlsx: Path = PROJECT_ROOT / "data" / "OD Sales 2025.xlsx"
     cors_origins: Annotated[list[str], NoDecode] = [
         "http://localhost:5173",
         "http://localhost:3000",
@@ -44,6 +45,10 @@ class Settings(BaseSettings):
     neo4j_enabled: bool = True
 
     public_api_token: str = ""
+
+    anthropic_api_key: str = ""
+    anthropic_model: str = "claude-haiku-4-5"
+    anthropic_max_tokens: int = 1024
 
     shopify_api_base_url: str = ""
     shopify_api_token: str = ""

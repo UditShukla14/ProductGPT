@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,7 @@ from app.shopify.graph.schemas import (
     ShopifySyncResourceResult,
     ShopifySyncResponse,
     ShopifySyncJobStatus,
+    ShopifySyncStartRequest,
     ShopifySyncStartResponse,
     ShopifySyncStatusResponse,
 )
@@ -71,6 +72,7 @@ def _job_to_schema(job) -> ShopifySyncJobStatus:
         current_resource=job.current_resource,
         phase=job.phase,
         error=job.error,
+        requested_resources=list(job.requested_resources or []),
         results=[
             ShopifySyncResourceResult(
                 resource=result.resource,
@@ -100,7 +102,9 @@ def sync_status() -> ShopifySyncStatusResponse:
 
 
 @router.post("/sync/start", response_model=ShopifySyncStartResponse, status_code=202)
-def start_sync(rebuild_graph: bool = True) -> ShopifySyncStartResponse | JSONResponse:
+def start_sync(
+    payload: ShopifySyncStartRequest = Body(default_factory=ShopifySyncStartRequest),
+) -> ShopifySyncStartResponse | JSONResponse:
     if not is_shopify_configured():
         missing = _missing_shopify_config()
         raise HTTPException(
@@ -119,12 +123,21 @@ def start_sync(rebuild_graph: bool = True) -> ShopifySyncStartResponse | JSONRes
         )
 
     try:
-        job = start_sync_job(rebuild_graph=rebuild_graph)
+        job = start_sync_job(
+            resources=payload.resources,
+            rebuild_graph=payload.rebuild_graph,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
+    resource_label = ", ".join(job.requested_resources) if job.requested_resources else "all"
     return ShopifySyncStartResponse(
-        message="Shopify sync started on the server. Poll /shopify/sync/status for progress.",
+        message=(
+            f"Shopify sync started for {resource_label}. "
+            "Poll /shopify/sync/status for progress."
+        ),
         job=_job_to_schema(job),
     )
 

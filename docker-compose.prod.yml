@@ -6,8 +6,9 @@ services:
       NEO4J_AUTH: ${NEO4J_USER:-neo4j}/${NEO4J_PASSWORD:-productgpt}
       NEO4J_PLUGINS: '["graph-data-science"]'
       NEO4J_dbms_security_procedures_unrestricted: gds.*
+      # Tuned for 4 GB droplets (2 vCPU) — leaves ~2 GB for OS + backend + nginx
       NEO4J_dbms_memory_heap_initial__size: 1G
-      NEO4J_dbms_memory_heap_max__size: 2G
+      NEO4J_dbms_memory_heap_max__size: 1G
       NEO4J_dbms_memory_pagecache_size: 512m
     volumes:
       - neo4j_data:/data
@@ -31,6 +32,15 @@ services:
       NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
       NEO4J_ENABLED: ${NEO4J_ENABLED:-true}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      SHOPIFY_API_BASE_URL: ${SHOPIFY_API_BASE_URL:-}
+      SHOPIFY_API_TOKEN: ${SHOPIFY_API_TOKEN:-}
+      SHOPIFY_API_SHOP_DOMAIN: ${SHOPIFY_API_SHOP_DOMAIN:-}
+      SHOPIFY_API_PAGE_LIMIT: ${SHOPIFY_API_PAGE_LIMIT:-0}
+      SHOPIFY_API_REQUESTS_PER_MINUTE: ${SHOPIFY_API_REQUESTS_PER_MINUTE:-100}
+      SHOPIFY_API_TIMEOUT_SECONDS: ${SHOPIFY_API_TIMEOUT_SECONDS:-60}
+      PUBLIC_API_TOKEN: ${PUBLIC_API_TOKEN:-}
+      SHOPIFY_ENRICH_DETAILS: ${SHOPIFY_ENRICH_DETAILS:-true}
+      SHOPIFY_ENRICH_DETAIL_RESOURCES: ${SHOPIFY_ENRICH_DETAIL_RESOURCES:-customers,orders}
     volumes:
       - app_data:/app/data
     depends_on:
@@ -38,10 +48,10 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
-      interval: 30s
+      interval: 15s
       timeout: 10s
       retries: 5
-      start_period: 300s
+      start_period: 60s
 
   frontend:
     build:

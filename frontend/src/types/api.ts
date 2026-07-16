@@ -236,6 +236,7 @@ export interface ShopifySyncJobStatus {
   current_resource?: string | null
   phase?: string | null
   error?: string | null
+  requested_resources?: string[]
   results?: ShopifySyncResourceResult[]
   graph_rebuilt?: boolean
 }
@@ -250,7 +251,65 @@ export interface ShopifySyncResourceResult {
   error?: string | null
 }
 
+export interface ShopifySyncStartRequest {
+  resources?: Array<"products" | "customers" | "orders">
+  rebuild_graph?: boolean
+}
+
 export interface ShopifySyncStartResponse {
   message: string
   job: ShopifySyncJobStatus
+}
+
+export interface ChatHistoryMessage {
+  role: "user" | "assistant"
+  content: string
+}
+
+export interface ChatHvacCitation {
+  ahri_number?: string | null
+  tonnage?: number | null
+  seer?: number | null
+  equipment_category?: string | null
+  refrigerant_type?: string | null
+  outdoor_model?: string | null
+  coil_model?: string | null
+  furnace_model?: string | null
+  reason?: string | null
+  score?: number | null
+}
+
+export interface ChatShopifyCitation {
+  id?: string | null
+  title?: string | null
+  vendor?: string | null
+  product_type?: string | null
+  sku?: string | null
+  image_url?: string | null
+  handle?: string | null
+  status?: string | null
+}
+
+export interface ChatRetrievalEvent {
+  tool: string
+  input?: Record<string, unknown>
+  preview?: {
+    tool?: string
+    count?: number
+    items?: Array<ChatHvacCitation | ChatShopifyCitation>
+    matched_model?: string | null
+    matched_type?: string | null
+    product?: ChatShopifyCitation
+    product_id?: string
+    matchup_count?: number
+    bought_together_count?: number
+    error?: string
+  }
+}
+
+export type ChatSseHandler = {
+  onToken?: (text: string) => void
+  onRetrieval?: (event: ChatRetrievalEvent) => void
+  onError?: (message: string) => void
+  onDone?: (meta: { ok: boolean; refused?: string }) => void
 }

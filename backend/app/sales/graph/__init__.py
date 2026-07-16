@@ -1,0 +1,1 @@
+"""Sales graph package."""

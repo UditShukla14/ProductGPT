@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query"
 import { Loader2, Package, ShoppingBag } from "lucide-react"
 
 import { CardCarousel } from "@/components/CardCarousel"
+import { ProductFloatingChat } from "@/components/ProductFloatingChat"
 import { ShopifyProductCard } from "@/components/ShopifyProductCard"
 import { ShopifyMatchupsSection } from "@/components/ShopifyMatchupsSection"
 import { ShopifyProductDetail } from "@/components/ShopifyProductDetail"
@@ -151,6 +152,13 @@ export function ShopifyPage() {
           />
         )}
       </div>
+
+      {selectedProduct && (
+        <ProductFloatingChat
+          productId={selectedProduct.id}
+          productTitle={detail?.title ?? selectedProduct.title}
+        />
+      )}
     </main>
   )
 }

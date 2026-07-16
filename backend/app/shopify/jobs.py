@@ -6,9 +6,10 @@ import logging
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
 from app.shopify import ALL_RESOURCES
+from app.shopify.client import ResourceName
 from app.shopify.graph.store import shopify_graph_store
 from app.shopify.service import build_shopify_client, is_shopify_configured
 from app.shopify.sync import ResourceSyncResult, sync_resources
@@ -26,6 +27,7 @@ class ShopifySyncJob:
     current_resource: str | None = None
     phase: str | None = None
     error: str | None = None
+    requested_resources: list[str] = field(default_factory=list)
     results: list[ResourceSyncResult] = field(default_factory=list)
     graph_rebuilt: bool = False
     graph_stats: dict[str, Any] | None = None
@@ -45,6 +47,7 @@ def get_sync_job() -> ShopifySyncJob:
             current_resource=_job.current_resource,
             phase=_job.phase,
             error=_job.error,
+            requested_resources=list(_job.requested_resources),
             results=list(_job.results),
             graph_rebuilt=_job.graph_rebuilt,
             graph_stats=dict(_job.graph_stats) if _job.graph_stats else None,
@@ -56,8 +59,32 @@ def is_sync_running() -> bool:
         return _job.state == "running"
 
 
-def start_sync_job(*, rebuild_graph: bool = True) -> ShopifySyncJob:
+def _normalize_resources(
+    resources: Sequence[ResourceName] | None,
+) -> tuple[ResourceName, ...]:
+    if not resources:
+        return ALL_RESOURCES
+    unique: list[ResourceName] = []
+    seen: set[str] = set()
+    for name in resources:
+        if name not in ALL_RESOURCES:
+            raise ValueError(f"Unsupported Shopify resource: {name}")
+        if name in seen:
+            continue
+        seen.add(name)
+        unique.append(name)
+    # Keep stable ALL_RESOURCES order
+    return tuple(name for name in ALL_RESOURCES if name in seen)
+
+
+def start_sync_job(
+    *,
+    resources: Sequence[ResourceName] | None = None,
+    rebuild_graph: bool = True,
+) -> ShopifySyncJob:
     global _thread
+
+    selected = _normalize_resources(resources)
 
     with _lock:
         if _job.state == "running":
@@ -75,13 +102,14 @@ def start_sync_job(*, rebuild_graph: bool = True) -> ShopifySyncJob:
         _job.current_resource = None
         _job.phase = "starting"
         _job.error = None
+        _job.requested_resources = list(selected)
         _job.results = []
         _job.graph_rebuilt = False
         _job.graph_stats = None
 
     _thread = threading.Thread(
         target=_run_sync_job,
-        kwargs={"rebuild_graph": rebuild_graph},
+        kwargs={"resources": selected, "rebuild_graph": rebuild_graph},
         name="shopify-sync",
         daemon=True,
     )
@@ -99,14 +127,18 @@ def _on_resource_start(resource: str) -> None:
     _set_job(current_resource=resource, phase="syncing")
 
 
-def _run_sync_job(*, rebuild_graph: bool) -> None:
+def _run_sync_job(*, resources: tuple[ResourceName, ...], rebuild_graph: bool) -> None:
     results: list[ResourceSyncResult] = []
     try:
-        logger.info("Background Shopify sync started (rebuild_graph=%s)", rebuild_graph)
+        logger.info(
+            "Background Shopify sync started (resources=%s, rebuild_graph=%s)",
+            ",".join(resources),
+            rebuild_graph,
+        )
         with build_shopify_client() as client:
             results = sync_resources(
                 client,
-                ALL_RESOURCES,
+                resources,
                 rebuild_graph=False,
                 on_resource_start=_on_resource_start,
             )

@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 
 import { AppHeader } from "@/components/AppHeader"
 import { HvacPage } from "@/pages/HvacPage"
+import { SettingsPage } from "@/pages/SettingsPage"
 import { ShopifyPage } from "@/pages/ShopifyPage"
 
 export default function App() {
@@ -12,6 +13,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HvacPage />} />
           <Route path="/shopify" element={<ShopifyPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </div>

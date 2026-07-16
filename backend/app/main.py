@@ -81,6 +81,9 @@ def root():
         "docs": "/docs",
         "health": "/api/v1/health",
         "recommendations": "/api/v1/recommendations/hvac",
+        "chat": "/api/v1/chat/messages",
+        "public_chat": "/api/v1/public/chat/messages",
         "public_product_lookup": "/api/v1/public/products/{product_id}",
         "public_shopify_recommendations": "/api/v1/public/shopify/products/{product_id}",
+        "sales_graph": "/api/v1/sales/graph/stats",
     }

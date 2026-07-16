@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query"
-import { Activity, Database, Package, ShoppingCart, Users } from "lucide-react"
+import { Activity, Database, Package, Settings, ShoppingCart, Users } from "lucide-react"
 import { Link, useLocation } from "react-router-dom"
 
 import { Badge } from "@/components/ui/badge"
-import { ShopifySyncButton } from "@/components/ShopifySyncButton"
+import { buttonVariants } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { fetchHealth, fetchShopifySyncStatus } from "@/lib/api"
 
@@ -29,6 +29,8 @@ export function AppHeader() {
   })
 
   const isShopify = location.pathname.startsWith("/shopify")
+  const isSettings = location.pathname.startsWith("/settings")
+  const syncRunning = shopifyStatus?.job.state === "running"
 
   return (
     <header
@@ -40,12 +42,18 @@ export function AppHeader() {
           <div className="min-w-0">
             <h1 className="text-base font-semibold tracking-tight sm:text-lg">
               ProductGPT
-              {isShopify ? " · Shopify Catalog" : " · HVAC System Finder"}
+              {isSettings
+                ? " · Settings"
+                : isShopify
+                  ? " · Shopify Catalog"
+                  : " · HVAC System Finder"}
             </h1>
             <p className="text-xs text-muted-foreground">
-              {isShopify
-                ? "Search synced products and order-based recommendations"
-                : "Goodman AHRI-certified matchups"}
+              {isSettings
+                ? "Shopify sync controls and progress"
+                : isShopify
+                  ? "Search synced products and order-based recommendations"
+                  : "Goodman AHRI-certified matchups"}
             </p>
           </div>
 
@@ -91,7 +99,11 @@ export function AppHeader() {
                   <Users className="size-3" />
                   {shopifyStatus.customers.toLocaleString()} customers
                 </Badge>
-                <ShopifySyncButton />
+                {syncRunning && (
+                  <Badge variant="secondary" className="text-xs">
+                    Syncing…
+                  </Badge>
+                )}
               </>
             ) : null}
           </div>
@@ -123,6 +135,20 @@ export function AppHeader() {
               )}
             </>
           )}
+
+          <Link
+            to="/settings"
+            title="Settings"
+            aria-label="Open settings"
+            className={cn(
+              buttonVariants({
+                variant: isSettings ? "secondary" : "outline",
+                size: "icon-sm",
+              })
+            )}
+          >
+            <Settings className="size-3.5" />
+          </Link>
         </div>
       </div>
     </header>
