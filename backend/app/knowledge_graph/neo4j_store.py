@@ -17,6 +17,8 @@ from app.knowledge_graph.builder import (
 from app.knowledge_graph.neo4j_client import neo4j_client
 from app.models.hvac_system import HvacSystem
 from app.services.product_images import load_sku_image_map
+from app.services.width_resolution import normalize_width
+from app.schemas.component_search import ComponentSearchRequest
 from app.schemas.knowledge_graph import (
     GraphEdge,
     GraphExploreRequest,
@@ -27,6 +29,8 @@ from app.schemas.knowledge_graph import (
 )
 
 BATCH_SIZE = 2_000
+
+COMPONENT_REL_TYPES = ("HAS_OUTDOOR", "HAS_COIL", "HAS_FURNACE")
 
 SCHEMA_QUERIES = [
     "CREATE CONSTRAINT graph_node_id IF NOT EXISTS FOR (n:GraphNode) REQUIRE n.id IS UNIQUE",
@@ -318,6 +322,86 @@ class Neo4jGraphStore:
             ).data()
 
         return [row["id"] for row in partial]
+
+    def search_components(self, request: ComponentSearchRequest) -> list[dict[str, Any]]:
+        """Find AHRI certification matchups via GraphNode component traversal."""
+        term = request.model.strip()
+        if not term:
+            return []
+
+        component_types = (
+            [request.component_type]
+            if request.component_type != "auto"
+            else ["outdoor", "coil", "furnace"]
+        )
+
+        filters: list[str] = ["toLower(coalesce(cert.model_status, 'Active')) = 'active'"]
+        params: dict[str, Any] = {"term": term, "component_types": component_types}
+
+        if request.equipment_category:
+            filters.append("cert.equipment_category = $equipment_category")
+            params["equipment_category"] = request.equipment_category.strip()
+        if request.refrigerant_type:
+            filters.append("cert.refrigerant_type = $refrigerant_type")
+            params["refrigerant_type"] = request.refrigerant_type.strip()
+        if request.flow:
+            filters.append("toLower(cert.indoor_type) = $flow")
+            params["flow"] = request.flow.strip().lower()
+        if request.coil_width:
+            normalized = normalize_width(request.coil_width)
+            if normalized:
+                filters.append("cert.coil_width = $coil_width")
+                params["coil_width"] = normalized
+        if request.furnace_width:
+            normalized = normalize_width(request.furnace_width)
+            if normalized:
+                filters.append("cert.furnace_width = $furnace_width")
+                params["furnace_width"] = normalized
+
+        filter_clause = " AND ".join(filters)
+        query = f"""
+        MATCH (comp:GraphNode)
+        WHERE comp.type IN $component_types
+          AND (
+            toLower(comp.label) CONTAINS toLower($term)
+            OR toLower(comp.id) CONTAINS toLower($term)
+          )
+        MATCH (cert:GraphNode {{type: 'certification'}})-[rel]->(comp)
+        WHERE type(rel) IN {list(COMPONENT_REL_TYPES)}
+          AND {filter_clause}
+        OPTIONAL MATCH (cert)-[:HAS_OUTDOOR]->(outdoor:GraphNode)
+        OPTIONAL MATCH (cert)-[:HAS_COIL]->(coil:GraphNode)
+        OPTIONAL MATCH (cert)-[:HAS_FURNACE]->(furnace:GraphNode)
+        RETURN
+            cert.system_id AS system_id,
+            comp.type AS matched_type,
+            comp.label AS matched_model,
+            outdoor.label AS outdoor_model,
+            coil.label AS coil_model,
+            furnace.label AS furnace_model,
+            cert.seer AS seer
+        ORDER BY cert.seer DESC, cert.ahri_number ASC
+        """
+
+        with neo4j_client.session() as session:
+            rows = session.run(query, **params).data()
+
+        deduped: dict[int, dict[str, Any]] = {}
+        for row in rows:
+            system_id = row.get("system_id")
+            if system_id is None:
+                continue
+            system_id = int(system_id)
+            existing = deduped.get(system_id)
+            if existing is None:
+                deduped[system_id] = row
+                continue
+            existing_seer = existing.get("seer") or 0
+            row_seer = row.get("seer") or 0
+            if row_seer > existing_seer:
+                deduped[system_id] = row
+
+        return list(deduped.values())
 
     def _neo4j_node_to_schema(self, neo_node: Any) -> GraphNode:
         props = dict(neo_node)

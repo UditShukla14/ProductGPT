@@ -8,7 +8,7 @@ from app.services.accessories import (
     load_engineering_product_map,
     resolve_accessories_for_models,
 )
-from app.services.component_search import search_by_component
+from app.services.graph_component_search import search_by_component_graph
 
 
 def lookup_product(
@@ -17,7 +17,7 @@ def lookup_product(
     params: ProductLookupQuery,
 ) -> ProductLookupResponse:
     query = product_id.strip()
-    search_result = search_by_component(
+    search_result = search_by_component_graph(
         db,
         ComponentSearchRequest(
             model=query,

@@ -15,7 +15,8 @@ Living document for ProductGPT — architectural decisions, conventions, and got
 ## API
 
 - **Base path**: `/api/v1`. Auth via `Authorization: Bearer <jwt>`. Standard error shape: `{ "error": { "code", "message" } }`.
-- **Chat streaming**: SSE (`text/event-stream`) on `POST /api/v1/chat/sessions/{id}/messages` — events: `token`, `retrieval`, `recommendation`, `done`.
+- **Public Shopify recommendations use ProductGraphNode**: `GET /api/v1/public/shopify/products/{id}` reads the merged Neo4j label only (Shopify fields + `MADE_BY` brand `image_url` + `MATCHES_COMPONENT` + `ORDERED_VARIANT`). Do not call SQLite `products_same_category_by_brand` / full order scans on this hot path — those scan ~36k products and dominate latency. Keep candidate pulls bounded (`LIMIT` + kind fragments); avoid unscoped `CONTAINS` over the full graph or Neo4j will wedge under load.
+- **Prod Neo4j on 4 GB / 2 vCPU**: Heap 1G + pagecache 512m via `NEO4J_server_memory_*` (Neo4j 5). Do not set `NEO4J_dbms_threads_worker_count` — Neo4j 5 rejects `dbms.threads.worker.count` under strict config validation and the container crash-loops. Healthcheck `start_period` 180s for first-boot GDS download.
 - **Recommendations**: `POST /api/v1/recommendations` with hybrid strategy (history + similarity + rules). Domain-specific routes OK (e.g. `POST /api/v1/recommendations/hvac`).
 - **Ingestion**: Multipart upload + async jobs (`POST /api/v1/ingest/upload`, `GET /api/v1/ingest/jobs/{id}`). Shopify webhooks at `POST /api/v1/webhooks/shopify`.
 - **Latency wins**: SSE streaming, Redis cache, precomputed embeddings at ingest, small retrieval top-k (5–10), parallel async fetches — not protocol choice.

@@ -1,7 +1,5 @@
 from pydantic import BaseModel, Field
 
-from app.schemas.component_search import ComponentSearchResponse
-
 
 class ShopifyVariantSummary(BaseModel):
     id: str | None = None
@@ -64,11 +62,35 @@ class ShopifySameCategoryByBrandResponse(BaseModel):
     brands: list[ShopifyCategoryBrandGroup] = Field(default_factory=list)
 
 
+class ShopifyPublicProductRef(BaseModel):
+    """Minimal product identity for public API consumers."""
+
+    id: str
+    handle: str | None = None
+
+
+class ShopifyPublicBrandGroup(BaseModel):
+    vendor: str
+    image_url: str | None = None
+    products: list[ShopifyPublicProductRef] = Field(default_factory=list)
+
+
+class ShopifyPublicSimilarProducts(BaseModel):
+    product_id: str
+    current_vendor: str | None = None
+    brands: list[ShopifyPublicBrandGroup] = Field(default_factory=list)
+
+
+class ShopifyPublicMatchups(BaseModel):
+    query: str
+    similar_matchups: list[ShopifyPublicProductRef] = Field(default_factory=list)
+
+
 class ShopifyPublicProductResponse(BaseModel):
-    """Combined public response: product detail + people-also-bought + other-options + AHRI matchups."""
+    """Public Shopify recommendations: id/handle refs only (+ brand image_url)."""
 
     product_id: str
-    product: ShopifyProductDetail
-    bought_together: list[ShopifyProductRecommendation] = Field(default_factory=list)
-    other_options: ShopifySameCategoryByBrandResponse
-    matchups: ComponentSearchResponse
+    product: ShopifyPublicProductRef
+    bought_together: list[ShopifyPublicProductRef] = Field(default_factory=list)
+    similar_products: ShopifyPublicSimilarProducts
+    matchups: ShopifyPublicMatchups

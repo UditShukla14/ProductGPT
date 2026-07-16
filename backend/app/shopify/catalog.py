@@ -9,7 +9,34 @@ from typing import Any
 _BTU_RE = re.compile(r"(\d[\d,]*)\s*btu\b", re.I)
 _ZONE_COUNT_RE = re.compile(r"\b(\d+)\s*[- ]?zones?\b", re.I)
 _SINGLE_ZONE_RE = re.compile(r"\bsingle\s+zone\b", re.I)
+_MULTI_ZONE_RE = re.compile(r"\bmulti[\s\-]?zone\b", re.I)
 _MODEL_TOKEN_RE = re.compile(r"^[A-Z0-9][A-Z0-9._/-]{2,}$", re.I)
+_SEER_RE = re.compile(r"\b(\d+(?:\.\d+)?)\s*seer(?:2)?\b", re.I)
+_VOLTAGE_RE = re.compile(r"\b(115|208|220|230|240|265)\s*v(?:olt)?s?\b", re.I)
+_REFRIGERANT_RE = re.compile(r"\b(r[\s\-]?32|r[\s\-]?410a)\b", re.I)
+# Near-capacity tolerance for nominal vs rated BTU (e.g. 12,000 title vs 11,500 rated).
+_BTU_TOLERANCE = 1000
+# Minimum similarity score before a product is treated as "related".
+_MIN_RELATED_SCORE = 55
+_COMPONENT_TYPE_MARKERS = (
+    "condenser",
+    "outdoor unit",
+    "indoor",
+    "wall unit",
+    "accessory",
+    "accessories",
+    "parts",
+    "lineset",
+    "thermostat",
+)
+_KIND_LABELS = {
+    "mini_split_system": "Mini-split system",
+    "ptac": "PTAC",
+    "vtac": "VTAC",
+    "package_system": "Package system",
+    "component": "Component",
+    "other": "Other",
+}
 
 from app.shopify.graph.builder import _primary_image_url, _variants
 from app.shopify.storage import load_all_records, load_record_by_id
@@ -161,32 +188,54 @@ def _product_search_text(product: dict[str, Any]) -> str:
     return " ".join(parts).lower()
 
 
-def _extract_btu_digits(product: dict[str, Any]) -> str | None:
-    for text in (
+def _extract_btu_digits(product: dict[str, Any], *, blob: str | None = None) -> str | None:
+    texts = (
         " ".join(_string_list(product.get("tags"))),
         _first_str(product, "title") or "",
-    ):
+        _first_str(product, "description") or "",
+    )
+    if blob is not None:
+        texts = (blob, *texts)
+    for text in texts:
         match = _BTU_RE.search(text)
         if match:
             return match.group(1).replace(",", "")
     return None
 
 
-def _extract_zone_match_terms(product: dict[str, Any]) -> list[str]:
-    terms: list[str] = []
-    blob = _product_search_text(product)
-
+def _extract_zone_count(product: dict[str, Any], *, blob: str | None = None) -> int | None:
+    blob = _product_search_text(product) if blob is None else blob
     if _SINGLE_ZONE_RE.search(blob):
-        terms.extend(["single zone", "1 zone", "1-zone"])
-
-    for match in _ZONE_COUNT_RE.finditer(blob):
-        count = match.group(1)
-        terms.extend([f"{count} zone", f"{count}-zone", f"{count} zone rooms"])
-
+        return 1
+    if _MULTI_ZONE_RE.search(blob):
+        match = _ZONE_COUNT_RE.search(blob)
+        return int(match.group(1)) if match else 2
+    match = _ZONE_COUNT_RE.search(blob)
+    if match:
+        return int(match.group(1))
     product_type = (_first_str(product, "product_type", "type") or "").lower()
     if "single zone" in product_type or "single-zone" in product_type:
-        terms.extend(["single zone", "1 zone", "1-zone"])
+        return 1
+    if "multi-zone" in product_type or "multi zone" in product_type:
+        return 2
+    return None
 
+
+def _extract_zone_match_terms(product: dict[str, Any]) -> list[str]:
+    terms: list[str] = []
+    zone_count = _extract_zone_count(product)
+    if zone_count == 1:
+        terms.extend(["single zone", "1 zone", "1-zone"])
+    elif zone_count and zone_count > 1:
+        terms.extend(
+            [
+                f"{zone_count} zone",
+                f"{zone_count}-zone",
+                f"{zone_count} zone rooms",
+                "multi zone",
+                "multi-zone",
+            ]
+        )
     return list(dict.fromkeys(terms))
 
 
@@ -206,17 +255,11 @@ def _text_contains_zone_term(text: str, zone_terms: list[str]) -> bool:
 
 
 def _format_zone_display(product: dict[str, Any]) -> str | None:
-    blob = _product_search_text(product)
-    if _SINGLE_ZONE_RE.search(blob):
+    zone_count = _extract_zone_count(product)
+    if zone_count == 1:
         return "Single zone"
-    match = _ZONE_COUNT_RE.search(blob)
-    if match:
-        return f"{match.group(1)} zone"
-    product_type = (_first_str(product, "product_type", "type") or "").lower()
-    if "single zone" in product_type or "single-zone" in product_type:
-        return "Single zone"
-    if "multi-zone" in product_type or "multi zone" in product_type:
-        return "Multi-zone"
+    if zone_count and zone_count > 1:
+        return f"{zone_count} zone"
     return None
 
 
@@ -227,38 +270,249 @@ def _format_btu_display(btu_digits: str) -> str:
         return f"{btu_digits} BTU"
 
 
+def _normalize_type_tokens(product_type: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", product_type.lower()).strip()
+
+
+def _detect_product_kind(product: dict[str, Any], *, blob: str | None = None) -> str:
+    """Coarse product family used as a hard gate for related matching."""
+    type_tokens = _normalize_type_tokens(
+        _first_str(product, "product_type", "type") or ""
+    )
+    if blob is None:
+        blob = _product_search_text(product)
+
+    if any(marker in type_tokens for marker in _COMPONENT_TYPE_MARKERS):
+        return "component"
+    if any(marker in blob for marker in ("condenser only", "outdoor unit only", "indoor unit only")):
+        return "component"
+    if "ptac" in type_tokens or re.search(r"\bptac\b", blob):
+        return "ptac"
+    if "vtac" in type_tokens or re.search(r"\bvtac\b", blob) or "vertical zoneline" in blob:
+        return "vtac"
+    if "package" in type_tokens or "packaged" in blob:
+        return "package_system"
+
+    is_mini = (
+        "mini split" in type_tokens
+        or "ductless" in type_tokens
+        or "mini split" in blob
+        or "mini-split" in blob
+        or "ductless" in blob
+    )
+    is_split_hp = (
+        type_tokens == "split heat pump"
+        or type_tokens.startswith("split heat pump ")
+        or "split heat pump" in blob
+    )
+    if is_mini or is_split_hp:
+        return "mini_split_system"
+
+    if type_tokens:
+        return f"type:{type_tokens}"
+    return "other"
+
+
+def _extract_product_profile(product: dict[str, Any]) -> dict[str, Any]:
+    text = _product_search_text(product)
+    title = (_first_str(product, "title") or "").lower()
+    btu_digits = _extract_btu_digits(product, blob=text)
+    seer_match = _SEER_RE.search(title) or _SEER_RE.search(text)
+    voltage_match = _VOLTAGE_RE.search(title) or _VOLTAGE_RE.search(text)
+    refrigerant_match = _REFRIGERANT_RE.search(text)
+
+    heat_pump: bool | None = None
+    if "heat pump" in text:
+        heat_pump = True
+    elif "cooling only" in text or "cool only" in text:
+        heat_pump = False
+
+    return {
+        "kind": _detect_product_kind(product, blob=text),
+        "btu": int(btu_digits) if btu_digits else None,
+        "seer": float(seer_match.group(1)) if seer_match else None,
+        "voltage": int(voltage_match.group(1)) if voltage_match else None,
+        "zone_count": _extract_zone_count(product, blob=text),
+        "heat_pump": heat_pump,
+        "refrigerant": (
+            re.sub(r"[\s\-]+", "", refrigerant_match.group(1)).lower()
+            if refrigerant_match
+            else None
+        ),
+        "product_type": (_first_str(product, "product_type", "type") or "").strip(),
+        "_text": text,
+    }
+
+
 def build_match_keywords(product: dict[str, Any]) -> list[str]:
+    """Human-readable attributes used for related-product matching."""
+    profile = _extract_product_profile(product)
     keywords: list[str] = []
-    category = (_first_str(product, "product_type", "type") or "").strip()
-    if category:
-        keywords.append(f"Category: {category}")
 
-    btu = _extract_btu_digits(product)
-    if btu:
-        keywords.append(f"BTU: {_format_btu_display(btu)}")
-
+    if profile["btu"] is not None:
+        keywords.append(f"BTU: {_format_btu_display(str(profile['btu']))}")
+    if profile["seer"] is not None:
+        keywords.append(f"SEER2: {profile['seer']:g}")
+    if profile["voltage"] is not None:
+        keywords.append(f"Voltage: {profile['voltage']}V")
     zone = _format_zone_display(product)
     if zone:
         keywords.append(f"Zone: {zone}")
+    kind_label = _KIND_LABELS.get(profile["kind"])
+    if kind_label:
+        keywords.append(f"Type: {kind_label}")
+    elif profile["product_type"]:
+        keywords.append(f"Category: {profile['product_type']}")
+    if profile["heat_pump"] is True:
+        keywords.append("Heat pump")
+    elif profile["heat_pump"] is False:
+        keywords.append("Cooling only")
 
     return keywords
 
 
+def _category_family_key(product_type: str) -> str:
+    exact = product_type.strip().lower()
+    if not exact:
+        return ""
+
+    tokens = _normalize_type_tokens(product_type)
+    if any(marker in tokens for marker in _COMPONENT_TYPE_MARKERS):
+        return f"exact:{exact}"
+
+    is_mini = "mini split" in tokens or "ductless" in tokens
+    is_split_hp = tokens == "split heat pump" or tokens.startswith("split heat pump ")
+    if is_mini or is_split_hp:
+        if (
+            "system" in tokens
+            or "heat pump" in tokens
+            or tokens in {"mini split", "mini split ac"}
+        ):
+            return "family:mini_split_system"
+
+    return f"exact:{exact}"
+
+
+def _same_product_category(source_type: str, candidate_type: str) -> bool:
+    source = source_type.strip()
+    candidate = candidate_type.strip()
+    if not source or not candidate:
+        return False
+    if source.lower() == candidate.lower():
+        return True
+    source_family = _category_family_key(source)
+    candidate_family = _category_family_key(candidate)
+    return bool(source_family) and source_family == candidate_family and source_family.startswith(
+        "family:"
+    )
+
+
+def _btu_near(source_btu: int, candidate_btu: int | None, candidate_text: str) -> tuple[bool, bool]:
+    """Return (is_near, is_exact) for BTU capacity."""
+    if candidate_btu is not None:
+        if candidate_btu == source_btu:
+            return True, True
+        if abs(candidate_btu - source_btu) <= _BTU_TOLERANCE:
+            return True, False
+        return False, False
+
+    if _text_contains_btu(candidate_text, str(source_btu)):
+        return True, True
+    for delta in range(500, _BTU_TOLERANCE + 1, 500):
+        for value in (source_btu - delta, source_btu + delta):
+            if value > 0 and _text_contains_btu(candidate_text, str(value)):
+                return True, False
+    return False, False
+
+
+def _related_similarity_score(
+    source: dict[str, Any],
+    candidate: dict[str, Any],
+    *,
+    source_profile: dict[str, Any] | None = None,
+) -> int | None:
+    """Score how closely a catalog product resembles the source.
+
+    Returns None when the candidate fails hard gates (wrong equipment kind / capacity).
+    """
+    source_profile = source_profile or _extract_product_profile(source)
+    candidate_profile = _extract_product_profile(candidate)
+    candidate_text = candidate_profile.get("_text") or _product_search_text(candidate)
+    score = 0
+
+    source_kind = source_profile["kind"]
+    candidate_kind = candidate_profile["kind"]
+
+    if source_kind.startswith("type:"):
+        if not _same_product_category(
+            source_profile["product_type"],
+            candidate_profile["product_type"],
+        ):
+            return None
+        score += 20
+    else:
+        if candidate_kind != source_kind:
+            return None
+        if source_kind == "component":
+            if not _same_product_category(
+                source_profile["product_type"],
+                candidate_profile["product_type"],
+            ):
+                return None
+        score += 25
+
+    source_btu = source_profile["btu"]
+    if source_btu is not None:
+        near, exact = _btu_near(source_btu, candidate_profile["btu"], candidate_text)
+        if not near:
+            return None
+        score += 40 if exact else 28
+    elif source_profile["product_type"]:
+        score += 15
+
+    if source_profile["seer"] is not None and candidate_profile["seer"] is not None:
+        seer_delta = abs(source_profile["seer"] - candidate_profile["seer"])
+        if seer_delta == 0:
+            score += 18
+        elif seer_delta <= 2:
+            score += 10
+
+    if (
+        source_profile["voltage"] is not None
+        and candidate_profile["voltage"] is not None
+        and source_profile["voltage"] == candidate_profile["voltage"]
+    ):
+        score += 12
+
+    # Soft signal — prefer matching heat-pump vs cooling-only, but do not hard-reject.
+    if (
+        source_profile["heat_pump"] is not None
+        and candidate_profile["heat_pump"] is not None
+    ):
+        score += 15 if source_profile["heat_pump"] == candidate_profile["heat_pump"] else -15
+
+    if (
+        source_profile["zone_count"] is not None
+        and candidate_profile["zone_count"] is not None
+    ):
+        if source_profile["zone_count"] != candidate_profile["zone_count"]:
+            return None
+        score += 10
+
+    if (
+        source_profile["refrigerant"]
+        and candidate_profile["refrigerant"]
+        and source_profile["refrigerant"] == candidate_profile["refrigerant"]
+    ):
+        score += 5
+
+    if score < _MIN_RELATED_SCORE:
+        return None
+    return score
+
+
 def _matches_same_category_spec(source: dict[str, Any], candidate: dict[str, Any]) -> bool:
-    category = (_first_str(source, "product_type", "type") or "").strip().lower()
-    candidate_type = (_first_str(candidate, "product_type", "type") or "").strip().lower()
-    if not category or candidate_type != category:
-        return False
-
-    candidate_text = _product_search_text(candidate)
-    btu = _extract_btu_digits(source)
-    zone_terms = _extract_zone_match_terms(source)
-
-    if btu and not _text_contains_btu(candidate_text, btu):
-        return False
-    if zone_terms and not _text_contains_zone_term(candidate_text, zone_terms):
-        return False
-    return True
+    return _related_similarity_score(source, candidate) is not None
 
 
 def _build_product_lookup_indexes() -> tuple[dict[str, str], dict[str, str]]:
@@ -456,22 +710,23 @@ def products_same_category(product_id: str, *, limit: int = 8) -> list[dict[str,
     if product is None:
         return []
 
-    category = (_first_str(product, "product_type", "type") or "").strip()
-    if not category:
+    profile = _extract_product_profile(product)
+    if profile["btu"] is None and not profile["product_type"]:
         return []
 
-    matches: list[dict[str, Any]] = []
+    scored: list[tuple[int, dict[str, Any]]] = []
+    source_profile = profile
     for candidate in load_all_records("products"):
         candidate_id = _first_str(candidate, "id")
         if not candidate_id or candidate_id == product_id:
             continue
-        if not _matches_same_category_spec(product, candidate):
+        score = _related_similarity_score(product, candidate, source_profile=source_profile)
+        if score is None:
             continue
-        matches.append(product_to_summary(candidate))
-        if len(matches) >= limit:
-            break
+        scored.append((score, product_to_summary(candidate)))
 
-    return matches
+    scored.sort(key=lambda item: (-item[0], item[1].get("title") or ""))
+    return [summary for _, summary in scored[:limit]]
 
 
 def products_same_category_by_brand(
@@ -479,7 +734,11 @@ def products_same_category_by_brand(
     *,
     per_brand_limit: int = 8,
 ) -> dict[str, Any]:
-    """Return same-category products grouped by vendor, excluding the current product and vendor."""
+    """Return related products grouped by vendor, excluding the current product and vendor.
+
+    Related means structured similarity (equipment kind + BTU), with SEER / voltage /
+    heat-pump / zone as soft boosts — not exact Shopify product_type equality.
+    """
     target_id = product_id.strip()
     product = load_record_by_id("products", target_id)
     if product is None:
@@ -488,7 +747,8 @@ def products_same_category_by_brand(
     category = (_first_str(product, "product_type", "type") or "").strip()
     current_vendor = (_first_str(product, "vendor") or "").strip()
     match_keywords = build_match_keywords(product)
-    if not category:
+    profile = _extract_product_profile(product)
+    if profile["btu"] is None and not category:
         return {
             "category": None,
             "current_vendor": current_vendor or None,
@@ -497,31 +757,34 @@ def products_same_category_by_brand(
         }
 
     current_vendor_lower = current_vendor.lower()
-    by_vendor: dict[str, list[dict[str, Any]]] = {}
+    by_vendor: dict[str, list[tuple[int, dict[str, Any]]]] = {}
+    source_profile = profile
 
     for candidate in load_all_records("products"):
         candidate_id = _first_str(candidate, "id")
         if not candidate_id or candidate_id == target_id:
             continue
-        if not _matches_same_category_spec(product, candidate):
+        score = _related_similarity_score(product, candidate, source_profile=source_profile)
+        if score is None:
             continue
 
         vendor = (_first_str(candidate, "vendor") or "Other").strip()
         if current_vendor_lower and vendor.lower() == current_vendor_lower:
             continue
 
-        bucket = by_vendor.setdefault(vendor, [])
-        if len(bucket) < per_brand_limit:
-            bucket.append(product_to_summary(candidate))
+        by_vendor.setdefault(vendor, []).append((score, product_to_summary(candidate)))
 
-    brands = [
-        {"vendor": vendor, "products": products}
-        for vendor, products in sorted(by_vendor.items(), key=lambda item: (-len(item[1]), item[0].lower()))
-        if products
-    ]
+    brands = []
+    for vendor, scored_products in by_vendor.items():
+        scored_products.sort(key=lambda item: (-item[0], item[1].get("title") or ""))
+        products = [summary for _, summary in scored_products[:per_brand_limit]]
+        if products:
+            brands.append({"vendor": vendor, "products": products})
+
+    brands.sort(key=lambda item: (-len(item["products"]), item["vendor"].lower()))
 
     return {
-        "category": category,
+        "category": category or None,
         "current_vendor": current_vendor or None,
         "match_keywords": match_keywords,
         "brands": brands,

@@ -240,7 +240,7 @@ def test_products_same_category_by_brand_filters_btu_and_zone_keywords(catalog_d
             },
             {
                 "id": "600",
-                "title": "MRCOOL 12,000 BTU Single Zone Mini Split",
+                "title": "MRCOOL 12,000 BTU Single Zone Mini Split Heat Pump",
                 "vendor": "MRCOOL",
                 "product_type": "Mini Split Heat Pump System",
                 "tags": ["DIY-12K"],
@@ -248,7 +248,7 @@ def test_products_same_category_by_brand_filters_btu_and_zone_keywords(catalog_d
             },
             {
                 "id": "700",
-                "title": "MRCOOL 18,000 BTU Single Zone Mini Split",
+                "title": "MRCOOL 18,000 BTU Single Zone Mini Split Heat Pump",
                 "vendor": "MRCOOL",
                 "product_type": "Mini Split Heat Pump System",
                 "tags": ["DIY-18K"],
@@ -256,7 +256,7 @@ def test_products_same_category_by_brand_filters_btu_and_zone_keywords(catalog_d
             },
             {
                 "id": "800",
-                "title": "MRCOOL 12,000 BTU 2 Zone Mini Split",
+                "title": "MRCOOL 12,000 BTU 2 Zone Mini Split Heat Pump",
                 "vendor": "MRCOOL",
                 "product_type": "Mini Split Heat Pump System",
                 "tags": ["DIY-12K-2Z"],
@@ -267,11 +267,83 @@ def test_products_same_category_by_brand_filters_btu_and_zone_keywords(catalog_d
 
     grouped = products_same_category_by_brand("500", per_brand_limit=5)
     assert grouped["category"] == "Mini Split Heat Pump System"
-    assert grouped["match_keywords"] == [
-        "Category: Mini Split Heat Pump System",
-        "BTU: 12,000 BTU",
-        "Zone: Single zone",
-    ]
+    assert "BTU: 12,000 BTU" in grouped["match_keywords"]
+    assert "Zone: Single zone" in grouped["match_keywords"]
+    assert "Type: Mini-split system" in grouped["match_keywords"]
     assert grouped["current_vendor"] == "Mitsubishi"
     assert [brand["vendor"] for brand in grouped["brands"]] == ["MRCOOL"]
     assert [product["id"] for product in grouped["brands"][0]["products"]] == ["600"]
+
+
+def test_related_products_require_similar_profile_not_btu_keyword_only(catalog_data):
+    """Nearly-same mini-splits match; PTACs / wrong capacity / components do not."""
+    upsert_records(
+        "products",
+        [
+            {
+                "id": "910",
+                "title": "Pioneer 12,000 BTU 17 SEER2 Ductless Mini-Split Heat Pump 115V",
+                "vendor": "Pioneer",
+                "product_type": "Mini-Split Inverter AC Heat Pump System",
+                "description": "R-32 inverter heat pump full set",
+                "tags": ["WYT012"],
+                "variants": [{"id": "v910", "sku": "WYT012", "price": "809.00"}],
+            },
+            {
+                "id": "920",
+                "title": "MRCOOL 12,000 BTU 17 SEER2 Mini Split Heat Pump System 115V",
+                "vendor": "MRCOOL",
+                "product_type": "Mini Split Heat Pump System",
+                "tags": ["DIY-12"],
+                "variants": [{"id": "v920", "sku": "DIY-12", "price": "1199.00"}],
+            },
+            {
+                "id": "925",
+                "title": "Daikin 12,000 BTU Mini Split Heat Pump System",
+                "vendor": "Daikin",
+                "product_type": "Mini Split Heat Pump System",
+                "tags": ["DX12"],
+                "variants": [{"id": "v925", "sku": "DX12", "price": "1399.00"}],
+            },
+            {
+                "id": "930",
+                "title": "GE 12,000 BTU PTAC Heat Pump",
+                "vendor": "GE",
+                "product_type": "PTAC",
+                "tags": ["AZVS12"],
+                "variants": [{"id": "v930", "sku": "AZVS12", "price": "999.00"}],
+            },
+            {
+                "id": "935",
+                "title": "MRCOOL 12,000 BTU Mini Split Condenser Only",
+                "vendor": "MRCOOL",
+                "product_type": "Mini Split Condenser",
+                "tags": ["DIY-12-C"],
+                "variants": [{"id": "v935", "sku": "DIY-12-C", "price": "799.00"}],
+            },
+            {
+                "id": "940",
+                "title": "Pioneer 18,000 BTU Mini-Split Inverter Heat Pump System",
+                "vendor": "Pioneer",
+                "product_type": "Mini-Split Inverter AC Heat Pump System",
+                "tags": ["WYT018"],
+                "variants": [{"id": "v940", "sku": "WYT018", "price": "1499.00"}],
+            },
+            {
+                "id": "950",
+                "title": "Daikin 24,000 BTU Mini Split Heat Pump",
+                "vendor": "Daikin",
+                "product_type": "Mini Split Heat Pump System",
+                "tags": ["DX24"],
+                "variants": [{"id": "v950", "sku": "DX24", "price": "1899.00"}],
+            },
+        ],
+    )
+
+    grouped = products_same_category_by_brand("910", per_brand_limit=5)
+    assert grouped["match_keywords"][0] == "BTU: 12,000 BTU"
+    assert "SEER2: 17" in grouped["match_keywords"]
+    assert "Voltage: 115V" in grouped["match_keywords"]
+    assert grouped["current_vendor"] == "Pioneer"
+    brands = {brand["vendor"]: [p["id"] for p in brand["products"]] for brand in grouped["brands"]}
+    assert brands == {"Daikin": ["925"], "MRCOOL": ["920"]}

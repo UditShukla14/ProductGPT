@@ -15,7 +15,7 @@ The React app is built to static files and served by nginx. API calls go to `/ap
 1. Go to [DigitalOcean Droplets](https://cloud.digitalocean.com/droplets/new)
 2. Choose:
    - **Image**: Ubuntu 24.04 LTS
-   - **Plan**: Basic — **2 GB RAM / 1 vCPU** minimum (4 GB recommended for Neo4j)
+   - **Plan**: Basic — **4 GB RAM / 2 vCPU** (recommended; 2 GB minimum is tight with Neo4j)
    - **Authentication**: SSH key (recommended)
 3. Create the droplet and note the **public IP**
 
@@ -88,6 +88,27 @@ apt-get install -y certbot
 Simplest option: put **DigitalOcean Load Balancer** or **Cloudflare** in front for TLS termination.
 
 ## 6. Troubleshooting
+
+### Neo4j unhealthy on first boot (4 GB / 2 vCPU)
+
+Prod Compose is tuned for **4 GB RAM / 2 vCPU**: Neo4j heap 1G + pagecache 512m + GDS plugin. First start downloads GDS and can take **2–3 minutes** before the healthcheck passes (`start_period: 180s`).
+
+On the droplet:
+
+```bash
+cd /opt/productgpt
+docker compose -f docker-compose.prod.yml logs neo4j --tail 100
+docker compose -f docker-compose.prod.yml ps
+free -h   # confirm ~4 GB total
+
+# Wait for healthy, then bring the stack up again if needed
+docker compose -f docker-compose.prod.yml up -d
+```
+
+Common causes:
+- **GDS still downloading** — wait; healthcheck retries for ~5 minutes
+- **Password mismatch** — `NEO4J_PASSWORD` only applies on first volume create (see below)
+- **Stale hostname** — DO hostnames like `*-1vcpu-2gb-*` may not match a resized droplet; trust `free -h`
 
 ### Backend unhealthy on first deploy
 

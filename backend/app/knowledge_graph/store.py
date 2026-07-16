@@ -25,6 +25,7 @@ from app.schemas.knowledge_graph import (
     GraphNode,
     GraphStats,
 )
+from app.schemas.component_search import ComponentSearchRequest, ComponentSearchResponse
 
 
 class NetworkxGraphStore:
@@ -270,6 +271,11 @@ class KnowledgeGraphStore:
         if self._backend == "neo4j" and neo4j_graph_store.is_ready():
             return neo4j_graph_store.export_graph(limit=limit)
         return self._networkx.export_graph(limit=limit)
+
+    def search_by_component(self, db: Session, request: ComponentSearchRequest) -> ComponentSearchResponse:
+        from app.services.graph_component_search import search_by_component_graph
+
+        return search_by_component_graph(db, request)
 
 
 graph_store = KnowledgeGraphStore()
